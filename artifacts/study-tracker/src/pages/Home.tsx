@@ -250,7 +250,7 @@ export default function Home() {
         ) : (
           <>
             {/* ── Focus for Today ───────────────────────── */}
-            <section className="mb-12">
+            <section className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
                 <Target className="w-3.5 h-3.5" /> Focus for Today
               </h2>
