@@ -2,12 +2,6 @@ import { exportData, importData } from '../db/database';
 import { auth } from './firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 
-declare global {
-  interface Window {
-    google: any;
-  }
-}
-
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 let cachedAccessToken: string | null = null;
