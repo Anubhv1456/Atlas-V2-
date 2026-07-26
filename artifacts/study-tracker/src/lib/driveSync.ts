@@ -44,6 +44,12 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Sign in error:', error);
+    if (error.code === 'auth/unauthorized-domain') {
+       throw new Error('Unauthorized domain. Please go to your Firebase Console -> Authentication -> Settings -> Authorized domains and add "atlasneetpg.vercel.app" and the preview domains to the list.');
+    }
+    if (error.code === 'auth/popup-closed-by-user') {
+       throw new Error('Sign-in popup was closed or blocked. If you are on a mobile device or preview, please check if your browser blocked the popup, or open the app in a new tab.');
+    }
     throw error;
   } finally {
     isSigningIn = false;
