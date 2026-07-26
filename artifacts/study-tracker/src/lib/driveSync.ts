@@ -1,64 +1,106 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import firebaseConfig from '../firebase-applet-config.json';
 import { exportData, importData } from '../db/database';
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
-const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/drive.appdata');
+const CLIENT_ID = '544141941495-1mi9tegj2piv1iv5aiu23j83ed5kapd7.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
-let isSigningIn = false;
 let cachedAccessToken: string | null = null;
+let cachedUser: any = null;
+let authStateListener: ((user: any, token: string) => void) | null = null;
+let authFailureListener: (() => void) | null = null;
 
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: any, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
-      }
+  authStateListener = onAuthSuccess || null;
+  authFailureListener = onAuthFailure || null;
+  
+  try {
+    const savedToken = localStorage.getItem('google_access_token');
+    const savedUser = localStorage.getItem('google_user');
+    
+    if (savedToken && savedUser) {
+      cachedAccessToken = savedToken;
+      cachedUser = JSON.parse(savedUser);
+      if (authStateListener) authStateListener(cachedUser, cachedAccessToken!);
     } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
+      if (authFailureListener) authFailureListener();
     }
+  } catch (e) {
+    if (authFailureListener) authFailureListener();
+  }
+
+  return () => {
+    authStateListener = null;
+    authFailureListener = null;
+  };
+};
+
+export const googleSignIn = async (): Promise<{ user: any; accessToken: string } | null> => {
+  if (!window.google?.accounts?.oauth2) {
+    throw new Error('Google Identity Services script not loaded yet. Please try again in a few seconds.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: async (tokenResponse: any) => {
+        if (tokenResponse.error !== undefined) {
+          reject(new Error(tokenResponse.error));
+          return;
+        }
+
+        const token = tokenResponse.access_token;
+        
+        try {
+          // Fetch user profile info
+          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Failed to fetch user info');
+          const userInfo = await res.json();
+          
+          const user = {
+            displayName: userInfo.name,
+            email: userInfo.email,
+            photoURL: userInfo.picture,
+          };
+
+          cachedAccessToken = token;
+          cachedUser = user;
+          
+          localStorage.setItem('google_access_token', token);
+          localStorage.setItem('google_user', JSON.stringify(user));
+
+          if (authStateListener) authStateListener(user, token);
+          
+          resolve({ user, accessToken: token });
+        } catch (err) {
+          reject(err);
+        }
+      },
+    });
+
+    client.requestAccessToken();
   });
 };
 
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
-  try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to get access token from Firebase Auth');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: any) {
-    console.error('Sign in error:', error);
-    if (error.code === 'auth/unauthorized-domain') {
-       throw new Error('Unauthorized domain. Please go to your Firebase Console -> Authentication -> Settings -> Authorized domains and add "atlasneetpg.vercel.app" and the preview domains to the list.');
-    }
-    if (error.code === 'auth/popup-closed-by-user') {
-       throw new Error('Sign-in popup was closed or blocked. If you are on a mobile device or preview, please check if your browser blocked the popup, or open the app in a new tab.');
-    }
-    throw error;
-  } finally {
-    isSigningIn = false;
-  }
-};
-
 export const googleSignOut = async () => {
-  await auth.signOut();
+  if (cachedAccessToken && window.google?.accounts?.oauth2) {
+    window.google.accounts.oauth2.revoke(cachedAccessToken, () => {});
+  }
   cachedAccessToken = null;
+  cachedUser = null;
+  localStorage.removeItem('google_access_token');
+  localStorage.removeItem('google_user');
+  if (authFailureListener) authFailureListener();
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
@@ -75,6 +117,11 @@ async function getSyncFileId(token: string): Promise<string | null> {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      // Token expired or revoked
+      await googleSignOut();
+      throw new Error('Session expired. Please sign out and sign in again.');
+    }
     throw new Error('Failed to fetch sync file list');
   }
   const data = await res.json();
