@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { Home, CheckSquare, CalendarDays, Settings } from 'lucide-react';
+import { Home, CalendarDays, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function BottomNav() {
@@ -7,7 +7,6 @@ export function BottomNav() {
 
   const links = [
     { href: '/',         icon: Home,          label: 'Home'     },
-    { href: '/today',    icon: CheckSquare,    label: 'Today'    },
     { href: '/timeline', icon: CalendarDays,   label: 'Timeline' },
     { href: '/settings', icon: Settings,       label: 'Settings' },
   ];

@@ -73,7 +73,7 @@ export default function Settings() {
     setSyncing(true);
     try {
       await uploadToDrive(token);
-      toast({ title: 'Success', description: 'Data synced to Google Drive.' });
+      toast({ title: 'Success', description: 'Data synced to Cloud.' });
       
       const now = new Date().toISOString();
       localStorage.setItem(LS_KEY, now);
@@ -92,7 +92,7 @@ export default function Settings() {
     setSyncing(true);
     try {
       await downloadFromDrive(token);
-      toast({ title: 'Success', description: 'Data restored from Google Drive.' });
+      toast({ title: 'Success', description: 'Data restored from Cloud.' });
       window.location.reload();
     } catch (e: any) {
       toast({ title: 'Restore Failed', description: e.message, variant: 'destructive' }); return;
@@ -289,7 +289,7 @@ export default function Settings() {
         
         {/* Cloud Sync */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Google Drive Sync</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Cloud Sync</h2>
           <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
             {!user ? (
               <button
@@ -329,7 +329,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <div className="font-semibold text-foreground">Backup to Cloud</div>
-                    <div className="text-xs text-muted-foreground">Push local data to Google Drive</div>
+                    <div className="text-xs text-muted-foreground">Push local data to Cloud</div>
                   </div>
                 </button>
                 <button
@@ -342,7 +342,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <div className="font-semibold text-foreground">Restore from Cloud</div>
-                    <div className="text-xs text-muted-foreground">Pull data from Google Drive</div>
+                    <div className="text-xs text-muted-foreground">Pull data from Cloud</div>
                   </div>
                 </button>
               </>

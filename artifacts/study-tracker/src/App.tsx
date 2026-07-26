@@ -7,7 +7,6 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import Home from '@/pages/Home';
 import SubjectDetail from '@/pages/SubjectDetail';
-import Today from '@/pages/Today';
 import Timeline from '@/pages/Timeline';
 import Settings from '@/pages/Settings';
 
@@ -34,7 +33,6 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/subjects/:id" component={SubjectDetail} />
-          <Route path="/today" component={Today} />
           <Route path="/timeline" component={Timeline} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />

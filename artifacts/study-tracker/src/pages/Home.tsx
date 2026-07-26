@@ -1,8 +1,9 @@
 import { useRef, useState, useMemo } from 'react';
-import { useSubjects, useAllSystems, addSubject, useCurrentStreak } from '@/db/hooks';
+import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
 import { AddDialog } from '@/components/AddDialog';
-import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle } from 'lucide-react';
+import { FocusDialog } from '@/components/FocusDialog';
+import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
@@ -96,6 +97,33 @@ export default function Home() {
   let greeting = 'Good Evening';
   if (currentHour < 12) greeting = 'Good Morning';
   else if (currentHour < 17) greeting = 'Good Afternoon';
+
+  const [focusDialogType, setFocusDialogType] = useState<'primary' | 'secondary' | null>(null);
+
+  const primaryFocus = systems.find(s => s.focus === 'primary');
+  let secondaryFocus = systems.find(s => s.focus === 'secondary');
+  let isAutoSecondary = false;
+
+  const now = new Date();
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  
+  const dueRevisions = systems.filter(s => 
+    s.nextRevisionDate && 
+    new Date(s.nextRevisionDate) <= todayEnd &&
+    s.id !== primaryFocus?.id
+  );
+
+  if (dueRevisions.length > 0) {
+    dueRevisions.sort((a, b) => new Date(a.nextRevisionDate!).getTime() - new Date(b.nextRevisionDate!).getTime());
+    secondaryFocus = dueRevisions[0];
+    isAutoSecondary = true;
+  }
+
+  const handleSetFocus = (systemId: number) => {
+    if (focusDialogType) {
+      setFocus(systemId, focusDialogType);
+    }
+  };
 
   // Navigate to a system (open its parent subject with highlight)
   const goToSystem = (subjectId: number, systemId: number) => {
@@ -221,6 +249,87 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* ── Focus for Today ───────────────────────── */}
+            <section className="mb-12">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                <Target className="w-3.5 h-3.5" /> Focus for Today
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Primary Focus */}
+                <div className="bg-card rounded-2xl border border-primary/20 shadow-sm overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
+                  <div className="p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-2">Primary Focus</p>
+                    {primaryFocus ? (
+                      <div className="flex items-start justify-between">
+                        <button onClick={() => goToSystem(primaryFocus.subjectId, primaryFocus.id!)} className="text-left group flex-1">
+                          <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                            {primaryFocus.name}
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => setFocus(primaryFocus.id!, null)}
+                          className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                          aria-label="Remove primary focus"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setFocusDialogType('primary')}
+                        className="w-full py-3 mt-1 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 transition-all flex items-center justify-center gap-2 font-medium"
+                      >
+                        <Plus className="w-3 h-3" /> Select System
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Secondary Focus */}
+                <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden relative">
+                  {isAutoSecondary && <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/50" />}
+                  <div className="p-4">
+                    <p className={cn(
+                      "text-[10px] uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5",
+                      isAutoSecondary ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
+                    )}>
+                      {isAutoSecondary ? (
+                        <><Clock className="w-3 h-3" /> Revision Due</>
+                      ) : (
+                        "Secondary Focus"
+                      )}
+                    </p>
+                    {secondaryFocus ? (
+                      <div className="flex items-start justify-between">
+                        <button onClick={() => goToSystem(secondaryFocus.subjectId, secondaryFocus.id!)} className="text-left group flex-1">
+                          <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                            {secondaryFocus.name}
+                          </p>
+                        </button>
+                        {!isAutoSecondary && (
+                          <button
+                            onClick={() => setFocus(secondaryFocus.id!, null)}
+                            className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                            aria-label="Remove secondary focus"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setFocusDialogType('secondary')}
+                        className="w-full py-3 mt-1 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/50 transition-all flex items-center justify-center gap-2 font-medium"
+                      >
+                        <Plus className="w-3 h-3" /> Select System
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* ── Progress Rings (Quiet Confidence) ───────────────────────── */}
             <section className="mb-12 flex justify-center gap-10">
               <div className="flex flex-col items-center gap-3">
@@ -309,6 +418,14 @@ export default function Home() {
         title="New Subject"
         placeholder="e.g. Internal Medicine"
         onSave={addSubject}
+      />
+      <FocusDialog
+        open={focusDialogType !== null}
+        onOpenChange={(isOpen) => !isOpen && setFocusDialogType(null)}
+        title={`Set ${focusDialogType === 'primary' ? 'Primary' : 'Secondary'} Focus`}
+        systems={systems}
+        subjects={subjects}
+        onSelect={handleSetFocus}
       />
     </div>
   );

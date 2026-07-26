@@ -113,6 +113,22 @@ export async function updateSystem(id: number, changes: Partial<StudySystem>) {
   return await db.systems.update(id, { ...changes, updatedAt: new Date() });
 }
 
+/** Set focus mode for a system, ensuring only one primary and one secondary exist at a time. */
+export async function setFocus(id: number, focus: 'primary' | 'secondary' | null) {
+  return await db.transaction('rw', db.systems, async () => {
+    if (focus) {
+      // Find and unset any existing system with this focus
+      const existing = await db.systems.filter(s => s.focus === focus).toArray();
+      for (const sys of existing) {
+        if (sys.id !== id) {
+          await db.systems.update(sys.id!, { focus: null });
+        }
+      }
+    }
+    await db.systems.update(id, { focus, updatedAt: new Date() });
+  });
+}
+
 export async function deleteSystem(id: number) {
   await db.transaction('rw', db.systems, db.history, async () => {
     await db.history.where('systemId').equals(id).delete();
@@ -194,6 +210,7 @@ export async function recordInitialEvaluation(
     lastRevisionDate: null,
     currentRevisionInterval,
     nextRevisionDate,
+    focus: null,
   });
 }
 

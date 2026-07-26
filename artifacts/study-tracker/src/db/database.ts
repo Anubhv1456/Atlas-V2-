@@ -26,6 +26,9 @@ export interface StudySystem {
   status: SystemStatus;
   updatedAt: Date;
 
+  // ── Focus Mode ────────────────────────────────────────────────────────────
+  focus: 'primary' | 'secondary' | null;
+
   // ── Revision engine fields (v4) ─────────────────────────────────────────
   /** Set when both contentCompleted and qbankDone first become true. */
   completionDate: Date | null;
@@ -117,12 +120,19 @@ export class AtlasDB extends Dexie {
             if (!('nextRevisionDate' in sys))        sys['nextRevisionDate'] = null;
           });
       });
-    // v5: add subject-level PYQ years table
-    this.version(5).stores({
+    // v6: add focus field
+    this.version(6).stores({
       subjects: '++id, name',
-      systems: '++id, subjectId, name, updatedAt, nextRevisionDate',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus',
       history: '++id, subjectId, systemId, completedAt',
       pyqYears: '++id, subjectId',
+    }).upgrade(tx => {
+      return tx
+        .table('systems')
+        .toCollection()
+        .modify((sys: Record<string, unknown>) => {
+          if (!('focus' in sys)) sys['focus'] = null;
+        });
     });
   }
 }
@@ -178,6 +188,7 @@ export async function importData(data: {
           if (!('lastRevisionDate' in s))        base.lastRevisionDate = null;
           if (!('currentRevisionInterval' in s)) base.currentRevisionInterval = null;
           if (!('nextRevisionDate' in s))        base.nextRevisionDate = null;
+          if (!('focus' in s))                   base.focus = null;
           if (base.completionDate)    base.completionDate    = new Date(base.completionDate as unknown as string);
           if (base.lastRevisionDate)  base.lastRevisionDate  = new Date(base.lastRevisionDate as unknown as string);
           if (base.nextRevisionDate)  base.nextRevisionDate  = new Date(base.nextRevisionDate as unknown as string);

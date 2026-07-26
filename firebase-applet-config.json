@@ -1,12 +1,11 @@
 {
-  "projectId": "responsible-collector-6n50x",
-  "appId": "1:544141941495:web:444e30dc844448bd7251f2",
-  "apiKey": "AIzaSyCXEzhQoHaChdEovBd6UdyBDDcgepefp24",
-  "authDomain": "responsible-collector-6n50x.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-remixatlasv1-ecc7f0ce-c5ae-4833-964e-bfc743e28a97",
-  "storageBucket": "responsible-collector-6n50x.firebasestorage.app",
-  "messagingSenderId": "544141941495",
-  "measurementId": "",
+  "projectId": "atlas-neetpg",
+  "appId": "1:489304490472:web:f836f2763786f019e7e45d",
+  "apiKey": "AIzaSyBz2j8EH7IzmLBt-HrZV4ObgnsxMAkZp6A",
+  "authDomain": "atlas-neetpg.firebaseapp.com",
+  "storageBucket": "atlas-neetpg.firebasestorage.app",
+  "messagingSenderId": "489304490472",
+  "measurementId": "G-DF4M63Z2BH",
   "oAuthClientId": "544141941495-1mi9tegj2piv1iv5aiu23j83ed5kapd7.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }
