@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { StudySystem, SystemStatus } from '@/db/database';
-import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation } from '@/db/hooks';
+import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, completeRevision } from '@/db/hooks';
 import { ProgressBar } from './ProgressBar';
 import { ConfidenceDialog } from './ConfidenceDialog';
-import { ChevronDown, Trash2, Check, RotateCcw, Clock } from 'lucide-react';
+import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -11,11 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format, formatDistanceToNow } from 'date-fns';
 import { isRevisionDue, isRevisionOverdue, daysOverdue } from '@/db/revisionEngine';
+import confetti from 'canvas-confetti';
 
 interface SystemCardProps {
   system: StudySystem;
   subjectName: string;
   highlighted?: boolean;
+  dragHandleProps?: any;
 }
 
 // ── Circular progress ring ────────────────────────────────────────────────────
@@ -36,7 +38,7 @@ function ContentCircle({ pct }: { pct: number }) {
 }
 
 // ── SystemCard ────────────────────────────────────────────────────────────────
-export function SystemCard({ system, subjectName, highlighted }: SystemCardProps) {
+export function SystemCard({ system, subjectName, highlighted, dragHandleProps }: SystemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +104,7 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
     updateSystem(system.id!, { contentUnitsCompleted: newCompleted, contentCompleted: isNowDone });
     if (isNowDone) {
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#eab308', '#f59e0b', '#d97706'] });
       logCompletion({ subjectId: system.subjectId, subjectName, systemId: system.id!, systemName: system.name, taskKey: 'contentDone', taskLabel: 'Content', completedAt: new Date() });
     }
   };
@@ -145,6 +148,8 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
     const wasChecked = system.qbankDone;
     updateSystem(system.id!, { qbankDone: !wasChecked });
     if (!wasChecked) {
+      if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#2563eb', '#1d4ed8'] });
       logCompletion({ subjectId: system.subjectId, subjectName, systemId: system.id!, systemName: system.name, taskKey: 'qbankDone', taskLabel: 'Qbank', completedAt: new Date() });
     }
   };
@@ -162,6 +167,12 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
   const handleDeleteConfirm = () => {
     setShowDeleteConfirm(false);
     deleteSystem(system.id!);
+  };
+
+  const handleRevisionComplete = async () => {
+    if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#10b981', '#059669', '#047857'] });
+    await completeRevision(system.id!, system.status, system.subjectId, subjectName, system.name);
   };
 
   const statusColors: Record<SystemStatus, string> = {
@@ -195,13 +206,29 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
         )}
 
         {/* Header */}
-        <button onClick={() => setExpanded(!expanded)} className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/10 transition-colors focus:outline-none">
-          <div className="flex-1 pr-4">
-            <div className="flex items-center gap-3 mb-2">
+        <div className="w-full flex items-center transition-colors">
+          {dragHandleProps && (
+            <div {...dragHandleProps} className="p-3 text-muted-foreground/30 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing">
+              <GripVertical className="w-5 h-5" />
+            </div>
+          )}
+          <button onClick={() => setExpanded(!expanded)} className={cn("flex-1 p-4 flex items-center justify-between text-left focus:outline-none hover:bg-muted/10", !dragHandleProps && "pl-4")}>
+            <div className="flex-1 pr-4">
+              <div className="flex items-center gap-3 mb-2">
               <h4 className="font-semibold text-lg leading-tight text-foreground">{system.name}</h4>
               <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border', statusColors[system.status])}>
                 {system.status}
               </span>
+              {system.focus === 'primary' && (
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-primary/20 bg-primary/10 text-primary whitespace-nowrap">
+                  Primary Focus
+                </span>
+              )}
+              {system.focus === 'secondary' && (
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-border bg-muted/50 text-muted-foreground whitespace-nowrap">
+                  Secondary Focus
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <ProgressBar progress={progress} className="flex-1 h-1" />
@@ -212,6 +239,7 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
             <ChevronDown className="w-4 h-4" />
           </div>
         </button>
+        </div>
 
         {/* Expanded body */}
         <div className={cn('grid transition-all duration-300 ease-in-out', expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
@@ -279,6 +307,17 @@ export function SystemCard({ system, subjectName, highlighted }: SystemCardProps
                       highlight={revisionDue}
                       highlightClass={revisionOverdue ? 'text-destructive font-semibold' : 'text-amber-500 dark:text-amber-400 font-semibold'}
                     />
+                    {revisionDue && (
+                      <div className="pt-2">
+                        <Button 
+                          className="w-full rounded-xl font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                          onClick={handleRevisionComplete}
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Mark Revision Complete
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 

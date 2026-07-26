@@ -29,6 +29,9 @@ export interface StudySystem {
   // ── Focus Mode ────────────────────────────────────────────────────────────
   focus: 'primary' | 'secondary' | null;
 
+  // ── Ordering ──────────────────────────────────────────────────────────────
+  order: number;
+
   // ── Revision engine fields (v4) ─────────────────────────────────────────
   /** Set when both contentCompleted and qbankDone first become true. */
   completionDate: Date | null;
@@ -132,6 +135,28 @@ export class AtlasDB extends Dexie {
         .toCollection()
         .modify((sys: Record<string, unknown>) => {
           if (!('focus' in sys)) sys['focus'] = null;
+        });
+    });
+    // v7: add order field
+    this.version(7).stores({
+      subjects: '++id, name',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus',
+      history: '++id, subjectId, systemId, completedAt',
+      pyqYears: '++id, subjectId',
+    }).upgrade(tx => {
+      let currentOrder = 0;
+      let currentSubjectId = -1;
+      return tx
+        .table('systems')
+        .orderBy('subjectId')
+        .modify((sys: Record<string, unknown>) => {
+          if (sys['subjectId'] !== currentSubjectId) {
+            currentSubjectId = sys['subjectId'] as number;
+            currentOrder = 0;
+          }
+          if (!('order' in sys)) {
+             sys['order'] = currentOrder++;
+          }
         });
     });
   }

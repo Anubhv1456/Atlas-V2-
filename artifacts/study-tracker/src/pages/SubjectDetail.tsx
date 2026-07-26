@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link, useLocation, useSearch } from 'wouter';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
   useSubject, useSystemsBySubject, usePYQsBySubject,
-  addSystem, updateSubject, deleteSubject,
+  addSystem, updateSubject, deleteSubject, updateSystemsOrder,
   addPYQYear, updatePYQYear, deletePYQYear, togglePYQYear,
 } from '@/db/hooks';
 import { SystemCard } from '@/components/SystemCard';
@@ -235,8 +236,12 @@ export default function SubjectDetail() {
   const [, setLocation] = useLocation();
 
   const subject  = useSubject(subjectId);
-  const systems  = useSystemsBySubject(subjectId);
+  const rawSystems  = useSystemsBySubject(subjectId);
   const pyqYears = usePYQsBySubject(subjectId);
+
+  const systems = useMemo(() => {
+    return [...rawSystems].sort((a, b) => (a.order ?? Number.MAX_VALUE) - (b.order ?? Number.MAX_VALUE));
+  }, [rawSystems]);
 
   const [showAddSystem, setShowAddSystem] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -250,6 +255,24 @@ export default function SubjectDetail() {
     const v = params.get('highlight');
     return v ? parseInt(v, 10) : null;
   })();
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    
+    // We only support reordering when no filter is active to prevent confusion
+    if (activeFilter !== null) return;
+    
+    const items = Array.from(systems);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    const updates = items.map((item, index) => ({
+      id: item.id!,
+      order: index
+    }));
+    
+    await updateSystemsOrder(updates);
+  };
 
   if (!subject && id) {
     return <div className="p-8 text-center text-muted-foreground mt-20">Loading or subject not found.</div>;
@@ -297,7 +320,7 @@ export default function SubjectDetail() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative">
+    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Header */}
       <header className="mb-10">
         <div className="flex items-center justify-between mb-4">
@@ -450,16 +473,43 @@ export default function SubjectDetail() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-3">
-            {visibleSystems.map(system => (
-              <SystemCard
-                key={system.id}
-                system={system}
-                subjectName={subject.name}
-                highlighted={system.id === highlightId}
-              />
-            ))}
-          </div>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="systems-list" isDropDisabled={activeFilter !== null}>
+              {(provided) => (
+                <div 
+                  className="grid gap-3"
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                >
+                  {visibleSystems.map((system, index) => (
+                    <Draggable 
+                      key={system.id} 
+                      draggableId={String(system.id)} 
+                      index={index}
+                      isDragDisabled={activeFilter !== null}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          className={cn(snapshot.isDragging && "opacity-80 z-50")}
+                          style={provided.draggableProps.style}
+                        >
+                          <SystemCard
+                            system={system}
+                            subjectName={subject.name}
+                            highlighted={system.id === highlightId}
+                            dragHandleProps={provided.dragHandleProps}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         )}
       </section>
 

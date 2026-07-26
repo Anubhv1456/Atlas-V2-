@@ -90,9 +90,13 @@ export async function deleteSubject(id: number) {
 }
 
 export async function addSystem(subjectId: number, name: string) {
+  const existingSystems = await db.systems.where('subjectId').equals(subjectId).toArray();
+  const maxOrder = existingSystems.reduce((max, sys) => Math.max(max, sys.order ?? 0), -1);
+
   return await db.systems.add({
     subjectId,
     name,
+    order: maxOrder + 1,
     contentInitialized: false,
     contentUnitsTotal: 0,
     contentUnitsCompleted: 0,
@@ -111,6 +115,14 @@ export async function addSystem(subjectId: number, name: string) {
 
 export async function updateSystem(id: number, changes: Partial<StudySystem>) {
   return await db.systems.update(id, { ...changes, updatedAt: new Date() });
+}
+
+export async function updateSystemsOrder(updates: { id: number; order: number }[]) {
+  return await db.transaction('rw', db.systems, async () => {
+    for (const update of updates) {
+      await db.systems.update(update.id, { order: update.order, updatedAt: new Date() });
+    }
+  });
 }
 
 /** Set focus mode for a system, ensuring only one primary and one secondary exist at a time. */

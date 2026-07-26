@@ -3,7 +3,7 @@ import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus } fr
 import { SubjectCard } from '@/components/SubjectCard';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
-import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle } from 'lucide-react';
+import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
@@ -100,9 +100,8 @@ export default function Home() {
 
   const [focusDialogType, setFocusDialogType] = useState<'primary' | 'secondary' | null>(null);
 
-  const primaryFocus = systems.find(s => s.focus === 'primary');
-  let secondaryFocus = systems.find(s => s.focus === 'secondary');
-  let isAutoSecondary = false;
+  let primaryFocus = systems.find(s => s.focus === 'primary');
+  let isAutoPrimary = false;
 
   const now = new Date();
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -113,11 +112,177 @@ export default function Home() {
     s.id !== primaryFocus?.id
   );
 
+  if (!primaryFocus && dueRevisions.length === 0) {
+    const sortedSystems = [...systems].sort((a, b) => {
+      if (a.subjectId !== b.subjectId) return a.subjectId - b.subjectId;
+      return (a.order ?? Number.MAX_VALUE) - (b.order ?? Number.MAX_VALUE);
+    });
+    const incompleteSystem = sortedSystems.find(s => !(s.contentCompleted && s.qbankDone));
+    if (incompleteSystem) {
+      primaryFocus = incompleteSystem;
+      isAutoPrimary = true;
+    }
+  }
+
+  let secondaryFocus = systems.find(s => s.focus === 'secondary');
+  let isAutoSecondary = false;
+
   if (dueRevisions.length > 0) {
     dueRevisions.sort((a, b) => new Date(a.nextRevisionDate!).getTime() - new Date(b.nextRevisionDate!).getTime());
     secondaryFocus = dueRevisions[0];
     isAutoSecondary = true;
   }
+
+  // ── Knowledge Insights ──────────────────────────────────────────────────────
+  const insights = useMemo(() => {
+    if (systems.length === 0 || subjects.length === 0) return [];
+    
+    const items = [];
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59, 59);
+    
+    const overdueSystems = systems.filter(s => isRevisionOverdue(s));
+    const dueTomorrowSystems = systems.filter(s => s.nextRevisionDate && new Date(s.nextRevisionDate) > todayEnd && new Date(s.nextRevisionDate) <= tomorrowEnd);
+    const allCompletedSystems = systems.filter(s => s.contentCompleted && s.qbankDone);
+    
+    // 1. Prevent forgetting & Remove blockers
+    if (overdueSystems.length > 0) {
+      if (overdueSystems.length > 3) {
+        items.push({
+          id: 'overdue-many',
+          priority: 1,
+          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+          text: <span>Your revision backlog is beginning to grow. Clearing today's revisions should be your highest priority.</span>
+        });
+      } else if (overdueSystems.length === 1) {
+        items.push({
+          id: 'overdue-one',
+          priority: 1,
+          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+          text: <span>Clearing today's single overdue revision will completely eliminate your revision backlog.</span>
+        });
+      } else {
+        items.push({
+          id: 'overdue-some',
+          priority: 1,
+          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+          text: <span>You have a small cluster of overdue revisions. Clearing them today will prevent further memory decay.</span>
+        });
+      }
+    } else if (dueTomorrowSystems.length > 0) {
+      items.push({
+        id: 'due-tomorrow',
+        priority: 1.5,
+        icon: <Clock className="w-4 h-4 text-amber-500" />,
+        text: <span><strong className="text-foreground">{dueTomorrowSystems.length}</strong> important revision{dueTomorrowSystems.length > 1 ? 's become' : ' becomes'} due tomorrow. You are well-positioned to handle them.</span>
+      });
+    }
+
+    // 2. Finish important work & Reveal hidden patterns
+    subjects.forEach(sub => {
+      const subSystems = systems.filter(s => s.subjectId === sub.id);
+      if (subSystems.length === 0) return;
+      
+      const completeCount = subSystems.filter(s => s.contentCompleted && s.qbankDone).length;
+      const total = subSystems.length;
+      const pct = completeCount / total;
+      const oneMorePct = (completeCount + 1) / total;
+      
+      if (completeCount < total) {
+        if (pct < 0.5 && oneMorePct >= 0.5) {
+          items.push({
+            id: `milestone-50-${sub.id}`,
+            priority: 2,
+            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
+            text: <span>Completing one more system will bring <strong className="text-foreground">{sub.name}</strong> to half completion.</span>
+          });
+        } else if (pct < 0.75 && oneMorePct >= 0.75) {
+          items.push({
+            id: `milestone-75-${sub.id}`,
+            priority: 2,
+            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
+            text: <span>One more completed system will make <strong className="text-foreground">{sub.name}</strong> your next subject above 75%.</span>
+          });
+        } else if (completeCount === total - 1 && total > 1) {
+          const incompleteSystem = subSystems.find(s => !(s.contentCompleted && s.qbankDone));
+          items.push({
+            id: `milestone-100-${sub.id}`,
+            priority: 2,
+            icon: <Target className="w-4 h-4 text-primary" />,
+            text: <span>You are only one system (<strong className="text-foreground">{incompleteSystem?.name}</strong>) away from completely finishing {sub.name}.</span>
+          });
+        }
+      }
+      
+      // Reveal patterns: Inactivity
+      if (pct < 1 && pct > 0) {
+        // Find most recent updatedAt for this subject's systems
+        const lastActivity = Math.max(...subSystems.map(s => new Date(s.updatedAt).getTime()));
+        const daysInactive = Math.floor((now.getTime() - lastActivity) / (1000 * 3600 * 24));
+        if (daysInactive >= 7) {
+          items.push({
+            id: `inactive-${sub.id}`,
+            priority: 3,
+            icon: <Clock className="w-4 h-4 text-muted-foreground" />,
+            text: <span><strong className="text-foreground">{sub.name}</strong> has not received any study activity in {daysInactive} days.</span>
+          });
+        }
+      }
+    });
+
+    // 4. Reveal progress
+    if (systems.length > 5) {
+      const overallPct = allCompletedSystems.length / systems.length;
+      if (overallPct >= 0.65 && overallPct < 0.68) {
+        items.push({
+          id: 'overall-2/3',
+          priority: 4,
+          icon: <Activity className="w-4 h-4 text-primary" />,
+          text: <span>You are approaching two-thirds overall completion across all subjects.</span>
+        });
+      } else if (overallPct >= 0.48 && overallPct < 0.52) {
+        items.push({
+          id: 'overall-1/2',
+          priority: 4,
+          icon: <Activity className="w-4 h-4 text-primary" />,
+          text: <span>You have reached the halfway mark across your entire curriculum.</span>
+        });
+      }
+    }
+
+    // 5. Celebrate achievements
+    if (overdueSystems.length === 0 && allCompletedSystems.length > 0) {
+      items.push({
+        id: 'consistency',
+        priority: 5,
+        icon: <CheckCircle className="w-4 h-4 text-green-500" />,
+        text: <span>You are maintaining excellent revision consistency with no overdue systems.</span>
+      });
+    }
+
+    const strongSubjects = subjects.filter(sub => {
+      const subSys = systems.filter(s => s.subjectId === sub.id);
+      return subSys.length > 0 && subSys.every(s => s.status === 'Strong' && s.contentCompleted && s.qbankDone);
+    });
+    
+    if (strongSubjects.length > 0) {
+      const sub = strongSubjects[0]; // Just take one
+      items.push({
+        id: `mastery-${sub.id}`,
+        priority: 5,
+        icon: <CheckCircle className="w-4 h-4 text-[hsl(var(--gold))]" />,
+        text: <span><strong className="text-foreground">{sub.name}</strong> has become one of your strongest subjects.</span>
+      });
+    }
+
+    items.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.id.localeCompare(b.id);
+    });
+    
+    return items.slice(0, 3);
+  }, [systems, subjects]);
 
   const handleSetFocus = (systemId: number) => {
     if (focusDialogType) {
@@ -137,7 +302,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="relative z-10 flex-1 flex flex-col">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="mb-10 flex items-center justify-between">
@@ -259,7 +424,13 @@ export default function Home() {
                 <div className="bg-card rounded-2xl border border-primary/20 shadow-sm overflow-hidden relative">
                   <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
                   <div className="p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-2">Primary Focus</p>
+                    <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-2 flex items-center gap-1.5 w-full">
+                      {isAutoPrimary ? (
+                        <><Target className="w-3 h-3" /> Recommended Focus</>
+                      ) : (
+                        "Primary Focus"
+                      )}
+                    </p>
                     {primaryFocus ? (
                       <div className="flex items-start justify-between">
                         <button onClick={() => goToSystem(primaryFocus.subjectId, primaryFocus.id!)} className="text-left group flex-1">
@@ -267,13 +438,15 @@ export default function Home() {
                             {primaryFocus.name}
                           </p>
                         </button>
-                        <button
-                          onClick={() => setFocus(primaryFocus.id!, null)}
-                          className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                          aria-label="Remove primary focus"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
+                        {!isAutoPrimary && (
+                          <button
+                            onClick={() => setFocus(primaryFocus.id!, null)}
+                            className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                            aria-label="Remove primary focus"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -292,10 +465,17 @@ export default function Home() {
                   <div className="p-4">
                     <p className={cn(
                       "text-[10px] uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5",
-                      isAutoSecondary ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
+                      isAutoSecondary ? "text-amber-600 dark:text-amber-500 w-full" : "text-muted-foreground w-full"
                     )}>
                       {isAutoSecondary ? (
-                        <><Clock className="w-3 h-3" /> Revision Due</>
+                        <>
+                          <Clock className="w-3 h-3" /> Revision Due
+                          {dueRevisions.length > 1 && (
+                            <span className="ml-auto text-[9px] bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
+                              +{dueRevisions.length - 1} more
+                            </span>
+                          )}
+                        </>
                       ) : (
                         "Secondary Focus"
                       )}
@@ -329,6 +509,27 @@ export default function Home() {
                 </div>
               </div>
             </section>
+
+            {/* ── Knowledge Insights ──────────────────────────────────────────────── */}
+            {insights.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                  <Lightbulb className="w-3.5 h-3.5" /> Insights
+                </h2>
+                <div className="grid gap-2">
+                  {insights.map((insight) => (
+                    <div key={insight.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/50 text-sm">
+                      <div className="shrink-0 p-1.5 bg-background rounded-md border border-border/50 shadow-sm">
+                        {insight.icon}
+                      </div>
+                      <p className="text-muted-foreground leading-snug">
+                        {insight.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* ── Progress Rings (Quiet Confidence) ───────────────────────── */}
             <section className="mb-12 flex justify-center gap-10">
