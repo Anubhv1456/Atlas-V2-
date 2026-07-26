@@ -15,8 +15,7 @@ const queryClient = new QueryClient();
 
 const initTheme = () => {
   if (typeof window !== 'undefined') {
-    const isDark = localStorage.getItem('theme') === 'dark' ||
-      (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const isDark = localStorage.getItem('theme') === 'dark' || !('theme' in localStorage);
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {

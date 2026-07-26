@@ -1,4 +1,6 @@
 import { exportData, importData } from '../db/database';
+import { auth } from './firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 
 declare global {
   interface Window {
@@ -6,7 +8,6 @@ declare global {
   }
 }
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '544141941495-1mi9tegj2piv1iv5aiu23j83ed5kapd7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 let cachedAccessToken: string | null = null;
@@ -43,58 +44,43 @@ export const initAuth = (
 };
 
 export const googleSignIn = async (): Promise<{ user: any; accessToken: string } | null> => {
-  if (!window.google?.accounts?.oauth2) {
-    throw new Error('Google Identity Services script not loaded yet. Please try again in a few seconds.');
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.appdata');
+  provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+  provider.addScope('https://www.googleapis.com/auth/userinfo.email');
+
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken;
+    
+    if (!token) throw new Error("Could not get Google Access Token");
+    
+    const user = {
+      displayName: result.user.displayName,
+      email: result.user.email,
+      photoURL: result.user.photoURL,
+    };
+
+    cachedAccessToken = token;
+    cachedUser = user;
+    
+    localStorage.setItem('google_access_token', token);
+    localStorage.setItem('google_user', JSON.stringify(user));
+
+    if (authStateListener) authStateListener(user, token);
+    
+    return { user, accessToken: token };
+  } catch (err: any) {
+    throw new Error(err.message || "Failed to sign in with Google");
   }
-
-  return new Promise((resolve, reject) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: async (tokenResponse: any) => {
-        if (tokenResponse.error !== undefined) {
-          reject(new Error(tokenResponse.error));
-          return;
-        }
-
-        const token = tokenResponse.access_token;
-        
-        try {
-          // Fetch user profile info
-          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (!res.ok) throw new Error('Failed to fetch user info');
-          const userInfo = await res.json();
-          
-          const user = {
-            displayName: userInfo.name,
-            email: userInfo.email,
-            photoURL: userInfo.picture,
-          };
-
-          cachedAccessToken = token;
-          cachedUser = user;
-          
-          localStorage.setItem('google_access_token', token);
-          localStorage.setItem('google_user', JSON.stringify(user));
-
-          if (authStateListener) authStateListener(user, token);
-          
-          resolve({ user, accessToken: token });
-        } catch (err) {
-          reject(err);
-        }
-      },
-    });
-
-    client.requestAccessToken();
-  });
 };
 
 export const googleSignOut = async () => {
-  if (cachedAccessToken && window.google?.accounts?.oauth2) {
-    window.google.accounts.oauth2.revoke(cachedAccessToken, () => {});
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.error("Firebase Signout error:", err);
   }
   cachedAccessToken = null;
   cachedUser = null;

@@ -3,6 +3,7 @@ import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
 import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
@@ -267,23 +268,21 @@ export default function Settings() {
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Appearance</h2>
           <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-            <button
-              onClick={toggleTheme}
-              className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-xl text-primary">
-                  {isDark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+              <div className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                    {isDark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-foreground">Dark Mode</div>
+                    <div className="text-xs text-muted-foreground">Toggle light / dark appearance</div>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <div className="font-semibold text-foreground">Theme</div>
-                  <div className="text-xs text-muted-foreground">Toggle light / dark mode</div>
-                </div>
+                <Switch 
+                  checked={isDark} 
+                  onCheckedChange={toggleTheme} 
+                />
               </div>
-              <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-muted border border-border">
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-primary transition ${isDark ? 'translate-x-6' : 'translate-x-1'}`} />
-              </div>
-            </button>
           </div>
         </section>
 
