@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-const CLIENT_ID = '544141941495-1mi9tegj2piv1iv5aiu23j83ed5kapd7.apps.googleusercontent.com';
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '544141941495-1mi9tegj2piv1iv5aiu23j83ed5kapd7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 let cachedAccessToken: string | null = null;
