@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Atlas-V1",
+  "description": "Imported from GitHub: Anubhv1456/Atlas-V1",
+  "requestFramePermissions": [
+    "web-share"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

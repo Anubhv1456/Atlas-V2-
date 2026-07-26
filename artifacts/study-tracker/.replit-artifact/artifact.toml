@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Atlas"
+version = "1.0.0"
+id = "artifacts/study-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23521
+
+[services.development]
+run = "pnpm --filter @workspace/study-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/study-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/study-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23521"
+BASE_PATH = "/"

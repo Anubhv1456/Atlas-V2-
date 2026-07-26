@@ -1,0 +1,505 @@
+import { useState, useEffect, useRef } from 'react';
+import { exportData, importData } from '@/db/database';
+import { db } from '@/db/database';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+
+import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
+import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+
+// ── Last-backup timestamp helpers ──────────────────────────────────────────
+const LS_KEY = 'atlas_last_backup';
+
+function formatLastBackup(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (d.toDateString() === now.toDateString()) return `Today • ${time}`;
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday • ${time}`;
+
+  const date = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${date} • ${time}`;
+}
+
+// ── Import preview type ────────────────────────────────────────────────────
+interface ImportPreview {
+  backupDate: string | null;
+  subjects: number;
+  systems: number;
+  history: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw: any;
+}
+
+export default function Settings() {
+  const [isDark, setIsDark] = useState(false);
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  
+  const [importing, setImporting] = useState(false);
+  const { toast } = useToast();
+  const [user, setUser] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => setUser(user),
+      () => setUser(null)
+    );
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    try {
+      const res = await googleSignIn();
+      if (res) setUser(res.user);
+    } catch (e: any) {
+      toast({ title: 'Login Failed', description: e.message, variant: 'destructive' }); return;
+    }
+  };
+
+  const handleCloudPush = async () => {
+    const token = await getAccessToken();
+    if (!token) { toast({ title: 'Not authenticated', variant: 'destructive' }); return; }
+    setSyncing(true);
+    try {
+      await uploadToDrive(token);
+      toast({ title: 'Success', description: 'Data synced to Google Drive.' });
+      
+      const now = new Date().toISOString();
+      localStorage.setItem(LS_KEY, now);
+      setLastBackup(now);
+    } catch (e: any) {
+      toast({ title: 'Sync Failed', description: e.message, variant: 'destructive' }); return;
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleCloudPull = async () => {
+    if (!confirm('This will replace your local data with the cloud backup. Are you sure?')) return;
+    const token = await getAccessToken();
+    if (!token) { toast({ title: 'Not authenticated', variant: 'destructive' }); return; }
+    setSyncing(true);
+    try {
+      await downloadFromDrive(token);
+      toast({ title: 'Success', description: 'Data restored from Google Drive.' });
+      window.location.reload();
+    } catch (e: any) {
+      toast({ title: 'Restore Failed', description: e.message, variant: 'destructive' }); return;
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'));
+    setLastBackup(localStorage.getItem(LS_KEY));
+  }, []);
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    } else {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    }
+    setIsDark(!isDark);
+  };
+
+  // ── Quick Backup ─────────────────────────────────────────────────────────
+  const handleQuickBackup = async () => {
+    // 1. Generate JSON — if this fails, surface the error.
+    let json: string;
+    try {
+      const data = await exportData();
+      json = JSON.stringify(data, null, 2);
+    } catch {
+      alert('Failed to read your data. Please try again.');
+      return;
+    }
+
+    const filename = `atlas-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+    // 2. Try native share sheet (Android / iOS).
+    //    Chrome on Android only allows a limited set of MIME types for file
+    //    sharing — application/json is NOT in that list, so canShare() returns
+    //    false and we'd silently fall back to download. Using text/plain (which
+    //    JSON is) makes canShare() return true across all Android/iOS browsers
+    //    while keeping the .json filename intact.
+    //    canShare({ files }) can also throw TypeError on some browsers, so the
+    //    whole attempt is in its own try/catch; any failure other than the user
+    //    dismissing the sheet falls through to the download fallback.
+    let shared = false;
+    try {
+      const file = new File([json], filename, { type: 'text/plain' });
+      if (
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({ files: [file], title: 'Atlas Backup' });
+        shared = true;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return; // user cancelled — not an error
+      // Any other share failure → fall through to download below
+    }
+
+    // 3. Download fallback (desktop, or when share sheet isn't available).
+    if (!shared) {
+      try {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        alert('Failed to save backup. Please try again.');
+        return;
+      }
+    }
+
+    // 4. Record timestamp.
+    const now = new Date().toISOString();
+    localStorage.setItem(LS_KEY, now);
+    setLastBackup(now);
+  };
+
+  // ── Import — step 1: read & preview ─────────────────────────────────────
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.subjects || !data.systems) throw new Error('Invalid format');
+
+      // Try to extract a backup date from the first history entry or subject
+      let backupDate: string | null = null;
+      if (data.history?.length) {
+        const sorted = [...data.history].sort(
+          (a: { completedAt: string }, b: { completedAt: string }) =>
+            new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        );
+        backupDate = new Date(sorted[0].completedAt).toLocaleDateString([], {
+          year: 'numeric', month: 'short', day: 'numeric',
+        });
+      } else if (data.subjects?.length) {
+        const dates = data.subjects
+          .map((s: { updatedAt: string }) => new Date(s.updatedAt))
+          .sort((a: Date, b: Date) => b.getTime() - a.getTime());
+        if (dates.length) {
+          backupDate = dates[0].toLocaleDateString([], {
+            year: 'numeric', month: 'short', day: 'numeric',
+          });
+        }
+      }
+
+      setImportPreview({
+        backupDate,
+        subjects: data.subjects.length,
+        systems: data.systems.length,
+        history: data.history?.length ?? 0,
+        raw: data,
+      });
+    } catch {
+      alert('Could not read this file. Make sure it is a valid Atlas backup.');
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // ── Import — step 2: confirm & execute ───────────────────────────────────
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      await importData(importPreview.raw);
+      setImportPreview(null);
+      window.location.reload();
+    } catch {
+      alert('Import failed. Your existing data was not changed.');
+      setImporting(false);
+    }
+  };
+
+  // ── Delete all ───────────────────────────────────────────────────────────
+  const handleDeleteAll = async () => {
+    try {
+      await db.transaction('rw', db.subjects, db.systems, async () => {
+        await db.subjects.clear();
+        await db.systems.clear();
+      });
+      setShowDeleteConfirm(false);
+      alert('All data deleted successfully');
+    } catch {
+      alert('Failed to delete data');
+    }
+  };
+
+  return (
+    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative">
+      <header className="mb-10">
+        <h1 className="text-3xl font-semibold text-foreground tracking-tight">Settings</h1>
+      </header>
+
+      <div className="space-y-6">
+        {/* Appearance */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Appearance</h2>
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+            <button
+              onClick={toggleTheme}
+              className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                  {isDark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-foreground">Theme</div>
+                  <div className="text-xs text-muted-foreground">Toggle light / dark mode</div>
+                </div>
+              </div>
+              <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-muted border border-border">
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-primary transition ${isDark ? 'translate-x-6' : 'translate-x-1'}`} />
+              </div>
+            </button>
+          </div>
+        </section>
+
+        
+        {/* Cloud Sync */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Google Drive Sync</h2>
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
+            {!user ? (
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
+              >
+                <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">Sign in with Google</div>
+                  <div className="text-xs text-muted-foreground">Enable cross-device cloud sync</div>
+                </div>
+              </button>
+            ) : (
+              <>
+                <div className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full" />
+                    <div>
+                      <div className="font-semibold text-foreground text-sm">{user.displayName}</div>
+                      <div className="text-xs text-muted-foreground">{user.email}</div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={googleSignOut} className="text-muted-foreground">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign out
+                  </Button>
+                </div>
+                <button
+                  onClick={handleCloudPush}
+                  disabled={syncing}
+                  className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="p-2 bg-green-500/10 rounded-xl text-green-500">
+                    <CloudUpload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Backup to Cloud</div>
+                    <div className="text-xs text-muted-foreground">Push local data to Google Drive</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleCloudPull}
+                  disabled={syncing}
+                  className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="p-2 bg-orange-500/10 rounded-xl text-orange-500">
+                    <CloudDownload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Restore from Cloud</div>
+                    <div className="text-xs text-muted-foreground">Pull data from Google Drive</div>
+                  </div>
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Backup */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Backup</h2>
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
+            {/* Quick Backup */}
+            <button
+              onClick={handleQuickBackup}
+              className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                <Share2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Quick Backup</div>
+                <div className="text-xs text-muted-foreground">Share your data to any app or drive</div>
+              </div>
+            </button>
+
+            {/* Import Backup */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="p-2 bg-secondary rounded-xl text-secondary-foreground">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Import Backup</div>
+                <div className="text-xs text-muted-foreground">Restore from a previous backup</div>
+              </div>
+              <input
+                type="file"
+                accept=".json,application/json"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </button>
+
+            {/* Last Backup — static info row */}
+            <div className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-muted rounded-xl text-muted-foreground">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Last Backup</div>
+                <div className="text-xs text-muted-foreground">
+                  {lastBackup ? formatLastBackup(lastBackup) : 'No backup yet'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Danger Zone */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-destructive/70 mb-3 px-1 mt-8">Danger Zone</h2>
+          <div className="bg-destructive/5 border-destructive/20 rounded-2xl border overflow-hidden">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full p-4 flex items-center gap-3 hover:bg-destructive/10 transition-colors text-left"
+            >
+              <div className="p-2 bg-destructive/10 rounded-xl text-destructive">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-destructive">Delete All Data</div>
+                <div className="text-xs text-destructive/80">Wipes local database completely</div>
+              </div>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      {/* ── Import confirmation dialog ───────────────────────────────────── */}
+      <Dialog open={!!importPreview} onOpenChange={(open) => { if (!open) setImportPreview(null); }}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Replace Current Data?</DialogTitle>
+            <DialogDescription className="pt-1">
+              This backup will permanently replace everything in your local database.
+            </DialogDescription>
+          </DialogHeader>
+
+          {importPreview && (
+            <div className="mt-2 bg-muted/50 rounded-xl p-4 space-y-2.5">
+              {importPreview.backupDate && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Backup Date</span>
+                  <span className="font-medium text-foreground">{importPreview.backupDate}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subjects</span>
+                <span className="font-medium text-foreground">{importPreview.subjects}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Systems</span>
+                <span className="font-medium text-foreground">{importPreview.systems}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">History Entries</span>
+                <span className="font-medium text-foreground">{importPreview.history}</span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-row gap-2 mt-4 sm:justify-center">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setImportPreview(null)}
+              disabled={importing}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl font-semibold shadow-sm"
+              onClick={handleConfirmImport}
+              disabled={importing}
+            >
+              {importing ? 'Importing…' : 'Replace Current Data'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete-all confirmation dialog ──────────────────────────────── */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <div className="mx-auto w-12 h-12 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mb-4">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-center text-xl">Are you absolutely sure?</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              This action cannot be undone. This will permanently delete all your subjects, systems, and study progress from your device.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-2 mt-4 sm:justify-center">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleDeleteAll}>
+              Delete Everything
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

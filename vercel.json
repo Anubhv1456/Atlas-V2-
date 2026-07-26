@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build --workspace=artifacts/study-tracker",
+  "outputDirectory": "artifacts/study-tracker/dist",
+  "installCommand": "npm install --legacy-peer-deps",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
