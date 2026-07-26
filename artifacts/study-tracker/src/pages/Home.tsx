@@ -137,7 +137,17 @@ export default function Home() {
   const insights = useMemo(() => {
     if (systems.length === 0 || subjects.length === 0) return [];
     
-    const items = [];
+    // An insight exists to eliminate a decision.
+    // If it does not change what the user should do next, it is not an insight.
+    
+    interface Insight {
+      id: string;
+      confidence: number;
+      icon: JSX.Element;
+      text: JSX.Element;
+    }
+    
+    const candidates: Insight[] = [];
     const now = new Date();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59, 59);
@@ -146,40 +156,63 @@ export default function Home() {
     const dueTomorrowSystems = systems.filter(s => s.nextRevisionDate && new Date(s.nextRevisionDate) > todayEnd && new Date(s.nextRevisionDate) <= tomorrowEnd);
     const allCompletedSystems = systems.filter(s => s.contentCompleted && s.qbankDone);
     
-    // 1. Prevent forgetting & Remove blockers
+    // 1. REVISIONS & BACKLOG (High Confidence)
+    // Mutually exclusive: We only generate ONE revision-related insight.
     if (overdueSystems.length > 0) {
-      if (overdueSystems.length > 3) {
-        items.push({
-          id: 'overdue-many',
-          priority: 1,
-          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span>Your revision backlog is beginning to grow. Clearing today's revisions should be your highest priority.</span>
-        });
-      } else if (overdueSystems.length === 1) {
-        items.push({
+      const overdueCountsBySubject = subjects.map(sub => ({
+        sub, count: overdueSystems.filter(s => s.subjectId === sub.id).length
+      })).sort((a, b) => b.count - a.count);
+      
+      const biggestOverdue = overdueCountsBySubject[0];
+      
+      if (overdueSystems.length === 1) {
+        candidates.push({
           id: 'overdue-one',
-          priority: 1,
+          confidence: 90,
           icon: <AlertCircle className="w-4 h-4 text-destructive" />,
           text: <span>Clearing today's single overdue revision will completely eliminate your revision backlog.</span>
         });
-      } else {
-        items.push({
-          id: 'overdue-some',
-          priority: 1,
+      } else if (biggestOverdue && biggestOverdue.count > 0 && biggestOverdue.count === overdueSystems.length) {
+        candidates.push({
+          id: 'overdue-single-subject',
+          confidence: 95,
           icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span>You have a small cluster of overdue revisions. Clearing them today will prevent further memory decay.</span>
+          text: <span><strong className="text-foreground">{biggestOverdue.sub.name}'s</strong> overdue revisions are your highest priority. Clearing them today removes your entire backlog.</span>
+        });
+      } else if (biggestOverdue && biggestOverdue.count > 0 && biggestOverdue.count / overdueSystems.length >= 0.5) {
+        const pct = Math.round((biggestOverdue.count / overdueSystems.length) * 100);
+        candidates.push({
+          id: 'overdue-dominant',
+          confidence: 92,
+          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+          text: <span>Completing the overdue revisions in <strong className="text-foreground">{biggestOverdue.sub.name}</strong> will remove {pct}% of your entire backlog.</span>
+        });
+      } else {
+        candidates.push({
+          id: 'overdue-many',
+          confidence: 88,
+          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+          text: <span>Clearing your <strong className="text-foreground">{overdueSystems.length}</strong> overdue revisions should be your highest priority to prevent further memory decay.</span>
         });
       }
     } else if (dueTomorrowSystems.length > 0) {
-      items.push({
+      candidates.push({
         id: 'due-tomorrow',
-        priority: 1.5,
+        confidence: 75,
         icon: <Clock className="w-4 h-4 text-amber-500" />,
-        text: <span><strong className="text-foreground">{dueTomorrowSystems.length}</strong> important revision{dueTomorrowSystems.length > 1 ? 's become' : ' becomes'} due tomorrow. You are well-positioned to handle them.</span>
+        text: <span>Your <strong className="text-foreground">{dueTomorrowSystems.length}</strong> revision{dueTomorrowSystems.length > 1 ? 's' : ''} due tomorrow should take priority before starting new content.</span>
       });
     }
 
-    // 2. Finish important work & Reveal hidden patterns
+    // 2. MILESTONES & PROGRESS (Medium-High Confidence)
+    // Mutually exclusive: We only generate the single most impactful milestone across all subjects.
+    let bestMilestone: Insight | null = null;
+    let subjectsAbove75 = 0;
+    
+    // 3. NEGLECT / INACTIVITY (Medium Confidence)
+    // Mutually exclusive: We only highlight the single most neglected subject.
+    let worstInactivity: Insight & { days: number } | null = null;
+    
     subjects.forEach(sub => {
       const subSystems = systems.filter(s => s.subjectId === sub.id);
       if (subSystems.length === 0) return;
@@ -189,99 +222,108 @@ export default function Home() {
       const pct = completeCount / total;
       const oneMorePct = (completeCount + 1) / total;
       
+      if (pct >= 0.75) subjectsAbove75++;
+      
+      // Milestones
       if (completeCount < total) {
-        if (pct < 0.5 && oneMorePct >= 0.5) {
-          items.push({
-            id: `milestone-50-${sub.id}`,
-            priority: 2,
-            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
-            text: <span>Completing one more system will bring <strong className="text-foreground">{sub.name}</strong> to half completion.</span>
-          });
-        } else if (pct < 0.75 && oneMorePct >= 0.75) {
-          items.push({
-            id: `milestone-75-${sub.id}`,
-            priority: 2,
-            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
-            text: <span>One more completed system will make <strong className="text-foreground">{sub.name}</strong> your next subject above 75%.</span>
-          });
-        } else if (completeCount === total - 1 && total > 1) {
+        if (completeCount === total - 1 && total > 1) {
           const incompleteSystem = subSystems.find(s => !(s.contentCompleted && s.qbankDone));
-          items.push({
+          const candidate: Insight = {
             id: `milestone-100-${sub.id}`,
-            priority: 2,
+            confidence: 85,
             icon: <Target className="w-4 h-4 text-primary" />,
-            text: <span>You are only one system (<strong className="text-foreground">{incompleteSystem?.name}</strong>) away from completely finishing {sub.name}.</span>
-          });
+            text: <span>You are exactly one system (<strong className="text-foreground">{incompleteSystem?.name}</strong>) away from completely mastering {sub.name}.</span>
+          };
+          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
+        } else if (pct < 0.75 && oneMorePct >= 0.75) {
+          const candidate: Insight = {
+            id: `milestone-75-${sub.id}`,
+            confidence: 75,
+            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
+            text: <span>One more completed system will make <strong className="text-foreground">{sub.name}</strong> your {subjectsAbove75 === 0 ? 'first' : 'next'} subject above 75%.</span>
+          };
+          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
+        } else if (pct < 0.5 && oneMorePct >= 0.5) {
+          const candidate: Insight = {
+            id: `milestone-50-${sub.id}`,
+            confidence: 65,
+            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
+            text: <span>Completing one more system will bring <strong className="text-foreground">{sub.name}</strong> to exactly half completion.</span>
+          };
+          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
         }
       }
       
-      // Reveal patterns: Inactivity
+      // Inactivity
       if (pct < 1 && pct > 0) {
-        // Find most recent updatedAt for this subject's systems
         const lastActivity = Math.max(...subSystems.map(s => new Date(s.updatedAt).getTime()));
         const daysInactive = Math.floor((now.getTime() - lastActivity) / (1000 * 3600 * 24));
-        if (daysInactive >= 7) {
-          items.push({
-            id: `inactive-${sub.id}`,
-            priority: 3,
-            icon: <Clock className="w-4 h-4 text-muted-foreground" />,
-            text: <span><strong className="text-foreground">{sub.name}</strong> has not received any study activity in {daysInactive} days.</span>
-          });
+        if (daysInactive >= 10) {
+          if (!worstInactivity || daysInactive > worstInactivity.days) {
+            worstInactivity = {
+              id: `inactive-${sub.id}`,
+              confidence: 80,
+              icon: <Clock className="w-4 h-4 text-muted-foreground" />,
+              text: <span><strong className="text-foreground">{sub.name}</strong> hasn't been studied for {daysInactive} days. Reviewing it today will prevent knowledge loss.</span>,
+              days: daysInactive
+            };
+          }
         }
       }
     });
 
-    // 4. Reveal progress
-    if (systems.length > 5) {
-      const overallPct = allCompletedSystems.length / systems.length;
-      if (overallPct >= 0.65 && overallPct < 0.68) {
-        items.push({
-          id: 'overall-2/3',
-          priority: 4,
-          icon: <Activity className="w-4 h-4 text-primary" />,
-          text: <span>You are approaching two-thirds overall completion across all subjects.</span>
-        });
-      } else if (overallPct >= 0.48 && overallPct < 0.52) {
-        items.push({
-          id: 'overall-1/2',
-          priority: 4,
-          icon: <Activity className="w-4 h-4 text-primary" />,
-          text: <span>You have reached the halfway mark across your entire curriculum.</span>
-        });
-      }
-    }
+    if (bestMilestone) candidates.push(bestMilestone);
+    if (worstInactivity) candidates.push(worstInactivity);
 
-    // 5. Celebrate achievements
-    if (overdueSystems.length === 0 && allCompletedSystems.length > 0) {
-      items.push({
-        id: 'consistency',
-        priority: 5,
-        icon: <CheckCircle className="w-4 h-4 text-green-500" />,
-        text: <span>You are maintaining excellent revision consistency with no overdue systems.</span>
-      });
-    }
-
+    // 4. WEAK / CELEBRATORY (Low Confidence)
     const strongSubjects = subjects.filter(sub => {
       const subSys = systems.filter(s => s.subjectId === sub.id);
       return subSys.length > 0 && subSys.every(s => s.status === 'Strong' && s.contentCompleted && s.qbankDone);
     });
     
     if (strongSubjects.length > 0) {
-      const sub = strongSubjects[0]; // Just take one
-      items.push({
+      const sub = strongSubjects[0];
+      candidates.push({
         id: `mastery-${sub.id}`,
-        priority: 5,
+        confidence: 45, // Low confidence because it doesn't drive a new action
         icon: <CheckCircle className="w-4 h-4 text-[hsl(var(--gold))]" />,
-        text: <span><strong className="text-foreground">{sub.name}</strong> has become one of your strongest subjects.</span>
+        text: <span>Through consistent effort, <strong className="text-foreground">{sub.name}</strong> has now become one of your strongest subjects.</span>
       });
     }
 
-    items.sort((a, b) => {
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      return a.id.localeCompare(b.id);
-    });
+    if (overdueSystems.length === 0 && allCompletedSystems.length > 0) {
+      candidates.push({
+        id: 'consistency',
+        confidence: 40,
+        icon: <CheckCircle className="w-4 h-4 text-green-500" />,
+        text: <span>You are currently maintaining excellent revision consistency with absolutely no overdue systems.</span>
+      });
+    }
+
+    // 5. FILTER AND SELECT
+    // Confidence < 40: Never generate
+    // Confidence 40-69: Don't show unless nothing better exists
+    // Confidence 70-89: Show if space exists
+    // Confidence 90-100: Must show
+
+    const validCandidates = candidates
+      .filter(c => c.confidence >= 40)
+      .sort((a, b) => b.confidence - a.confidence);
     
-    return items.slice(0, 3);
+    const finalInsights: Insight[] = [];
+    
+    for (const insight of validCandidates) {
+      if (insight.confidence >= 90) {
+        finalInsights.push(insight);
+      } else if (insight.confidence >= 70 && finalInsights.length < 2) {
+        finalInsights.push(insight);
+      } else if (insight.confidence >= 40 && finalInsights.length === 0) {
+        finalInsights.push(insight);
+      }
+    }
+
+    // Cap at 2 insights max to maintain extreme focus and eliminate noise
+    return finalInsights.slice(0, 2);
   }, [systems, subjects]);
 
   const handleSetFocus = (systemId: number) => {
