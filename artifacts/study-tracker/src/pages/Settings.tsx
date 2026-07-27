@@ -93,7 +93,6 @@ export default function Settings() {
     try {
       await downloadFromDrive(token);
       toast({ title: 'Success', description: 'Data restored from Cloud.' });
-      window.location.reload();
     } catch (e: any) {
       toast({ title: 'Restore Failed', description: e.message, variant: 'destructive' }); return;
     } finally {
@@ -236,7 +235,6 @@ export default function Settings() {
     try {
       await importData(importPreview.raw);
       setImportPreview(null);
-      window.location.reload();
     } catch {
       alert('Import failed. Your existing data was not changed.');
       setImporting(false);
