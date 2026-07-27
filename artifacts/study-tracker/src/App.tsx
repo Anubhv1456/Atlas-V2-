@@ -14,11 +14,16 @@ const queryClient = new QueryClient();
 
 const initTheme = () => {
   if (typeof window !== 'undefined') {
-    const isDark = localStorage.getItem('theme') === 'dark' || !('theme' in localStorage);
-    if (isDark) {
+    try {
+      const isDark = localStorage.getItem('theme') === 'dark' || !('theme' in localStorage);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {
+      console.warn('localStorage access denied, fallback to dark theme', e);
       document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
     }
   }
 };

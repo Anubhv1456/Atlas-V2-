@@ -4,7 +4,8 @@ import { SystemStatus } from './database';
 import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today } from './revisionEngine';
 
 export function useSubjects() {
-  return useLiveQuery(() => db.subjects.toArray()) ?? [];
+  const subjects = useLiveQuery(() => db.subjects.toArray()) ?? [];
+  return [...subjects].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
 }
 
 export function useSubject(id: number) {
@@ -69,10 +70,21 @@ export function useAllPYQs(): PYQYear[] {
 // ── Actions ────────────────────────────────────────────────────────────────
 
 export async function addSubject(name: string) {
+  const existingSubjects = await db.subjects.toArray();
+  const maxOrder = existingSubjects.reduce((max, sub) => Math.max(max, sub.order ?? 0), -1);
   return await db.subjects.add({
     name,
+    order: maxOrder + 1,
     createdAt: new Date(),
     updatedAt: new Date(),
+  });
+}
+
+export async function updateSubjectsOrder(updates: { id: number; order: number }[]) {
+  return await db.transaction('rw', db.subjects, async () => {
+    for (const update of updates) {
+      await db.subjects.update(update.id, { order: update.order, updatedAt: new Date() });
+    }
   });
 }
 

@@ -1,9 +1,10 @@
 import { useRef, useState, useMemo } from 'react';
-import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus } from '@/db/hooks';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus, updateSubjectsOrder } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
-import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb } from 'lucide-react';
+import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
@@ -55,6 +56,20 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [showAddSubject, setShowAddSubject] = useState(false);
 
+  const handleSubjectDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(subjects);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    const updates = items.map((item, index) => ({
+      id: item.id!,
+      order: index
+    }));
+
+    await updateSubjectsOrder(updates);
+  };
+
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery]           = useState('');
@@ -104,32 +119,75 @@ export default function Home() {
 
   const now = new Date();
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  
+
+  // Map subject ID to its index in subjects array (which reflects drag-and-drop order)
+  const subjectIndexMap = new Map<number, number>();
+  subjects.forEach((sub, idx) => {
+    if (sub.id !== undefined) {
+      subjectIndexMap.set(sub.id, idx);
+    }
+  });
+
+  const sortSystemsByPriority = (a: StudySystem, b: StudySystem) => {
+    const subIdxA = subjectIndexMap.get(a.subjectId) ?? Number.MAX_VALUE;
+    const subIdxB = subjectIndexMap.get(b.subjectId) ?? Number.MAX_VALUE;
+    if (subIdxA !== subIdxB) return subIdxA - subIdxB;
+    return (a.order ?? Number.MAX_VALUE) - (b.order ?? Number.MAX_VALUE);
+  };
+
+  const sortedSystemsByPriority = [...systems].sort(sortSystemsByPriority);
+  const incompleteSystems = sortedSystemsByPriority.filter(s => !(s.contentCompleted && s.qbankDone));
+
+  if (!primaryFocus && incompleteSystems.length > 0) {
+    primaryFocus = incompleteSystems[0];
+    isAutoPrimary = true;
+  }
+
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+  // Revisions due or overdue (excluding system currently set as primary focus)
   const dueRevisions = systems.filter(s => 
     s.nextRevisionDate && 
     new Date(s.nextRevisionDate) <= todayEnd &&
     s.id !== primaryFocus?.id
   );
 
-  if (!primaryFocus && dueRevisions.length === 0) {
-    const sortedSystems = [...systems].sort((a, b) => {
-      if (a.subjectId !== b.subjectId) return a.subjectId - b.subjectId;
-      return (a.order ?? Number.MAX_VALUE) - (b.order ?? Number.MAX_VALUE);
-    });
-    const incompleteSystem = sortedSystems.find(s => !(s.contentCompleted && s.qbankDone));
-    if (incompleteSystem) {
-      primaryFocus = incompleteSystem;
-      isAutoPrimary = true;
-    }
-  }
+  // Highest priority revision: the one due for the longest (earliest nextRevisionDate)
+  dueRevisions.sort((a, b) => new Date(a.nextRevisionDate!).getTime() - new Date(b.nextRevisionDate!).getTime());
 
-  let secondaryFocus = systems.find(s => s.focus === 'secondary');
+  let customSecondary = systems.find(s => s.focus === 'secondary');
+  let secondaryFocus: StudySystem | undefined = undefined;
+  let isSecondaryOverriddenByRevision = false;
   let isAutoSecondary = false;
 
   if (dueRevisions.length > 0) {
-    dueRevisions.sort((a, b) => new Date(a.nextRevisionDate!).getTime() - new Date(b.nextRevisionDate!).getTime());
+    // Active revisions override secondary focus and suspend custom selection until completed
     secondaryFocus = dueRevisions[0];
+    isSecondaryOverriddenByRevision = true;
     isAutoSecondary = true;
+  } else if (customSecondary) {
+    // Custom user-selected secondary focus
+    secondaryFocus = customSecondary;
+    isSecondaryOverriddenByRevision = false;
+    isAutoSecondary = false;
+  } else {
+    // Fallback to top priority incomplete system (excluding primary focus)
+    const remainingIncomplete = incompleteSystems.filter(s => s.id !== primaryFocus?.id);
+    if (remainingIncomplete.length > 0) {
+      secondaryFocus = remainingIncomplete[0];
+      isAutoSecondary = true;
+      isSecondaryOverriddenByRevision = false;
+    }
+  }
+
+  // Calculate days overdue for active secondary revision
+  let secondaryDaysOverdue = 0;
+  if (isSecondaryOverriddenByRevision && secondaryFocus?.nextRevisionDate) {
+    const revDate = new Date(secondaryFocus.nextRevisionDate);
+    if (revDate < todayStart) {
+      const diffTime = todayStart.getTime() - new Date(revDate.getFullYear(), revDate.getMonth(), revDate.getDate()).getTime();
+      secondaryDaysOverdue = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    }
   }
 
   // ── Knowledge Insights ──────────────────────────────────────────────────────
@@ -465,33 +523,50 @@ export default function Home() {
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 {/* Primary Focus */}
-                <div className="bg-card rounded-2xl border border-primary/20 shadow-sm overflow-hidden relative">
+                <div className="bg-card rounded-2xl border border-primary/20 shadow-sm overflow-hidden relative flex flex-col justify-between">
                   <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
                   <div className="p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-2 flex items-center gap-1.5 w-full">
-                      {isAutoPrimary ? (
-                        <><Target className="w-3 h-3" /> Recommended Focus</>
-                      ) : (
-                        "Primary Focus"
-                      )}
-                    </p>
-                    {primaryFocus ? (
-                      <div className="flex items-start justify-between">
-                        <button onClick={() => goToSystem(primaryFocus.subjectId, primaryFocus.id!)} className="text-left group flex-1">
-                          <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                            {primaryFocus.name}
-                          </p>
-                        </button>
-                        {!isAutoPrimary && (
-                          <button
-                            onClick={() => setFocus(primaryFocus.id!, null)}
-                            className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                            aria-label="Remove primary focus"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
+                    <div className="flex items-center justify-between mb-2 gap-1">
+                      <p className="text-[10px] uppercase tracking-wider text-primary font-semibold flex items-center gap-1.5 truncate">
+                        {isAutoPrimary ? (
+                          <><Target className="w-3 h-3 shrink-0" /> Recommended Focus</>
+                        ) : (
+                          "Primary Focus"
                         )}
-                      </div>
+                      </p>
+                      {primaryFocus && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isAutoPrimary ? (
+                            <button
+                              onClick={() => setFocus(primaryFocus.id!, null)}
+                              className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
+                              title="Remove custom primary focus"
+                              aria-label="Remove custom primary focus"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setFocusDialogType('primary')}
+                              className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted/50"
+                              title="Customize primary focus"
+                              aria-label="Customize primary focus"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {primaryFocus ? (
+                      <button onClick={() => goToSystem(primaryFocus.subjectId, primaryFocus.id!)} className="text-left group w-full">
+                        <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2 text-sm leading-snug">
+                          {primaryFocus.name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                          {subjects.find(s => s.id === primaryFocus.subjectId)?.name}
+                        </p>
+                      </button>
                     ) : (
                       <button
                         onClick={() => setFocusDialogType('primary')}
@@ -504,47 +579,68 @@ export default function Home() {
                 </div>
 
                 {/* Secondary Focus */}
-                <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden relative">
-                  {isAutoSecondary && <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/50" />}
+                <div className="bg-card rounded-2xl border border-amber-500/20 shadow-sm overflow-hidden relative flex flex-col justify-between">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/80" />
+
                   <div className="p-4">
-                    <p className={cn(
-                      "text-[10px] uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5",
-                      isAutoSecondary ? "text-amber-600 dark:text-amber-500 w-full" : "text-muted-foreground w-full"
-                    )}>
-                      {isAutoSecondary ? (
-                        <>
-                          <Clock className="w-3 h-3" /> Revision Due
-                          {dueRevisions.length > 1 && (
-                            <span className="ml-auto text-[9px] bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
-                              +{dueRevisions.length - 1} more
-                            </span>
+                    <div className="flex items-center justify-between mb-2 gap-1">
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 truncate">
+                        {isSecondaryOverriddenByRevision ? (
+                          <Clock className="w-3 h-3 shrink-0" />
+                        ) : (
+                          <Target className="w-3 h-3 shrink-0" />
+                        )}
+                        Secondary Focus
+                      </p>
+
+                      {secondaryFocus && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* When customization is suspended due to revision, X disappears completely */}
+                          {!isSecondaryOverriddenByRevision && (
+                            !isAutoSecondary ? (
+                              <button
+                                onClick={() => setFocus(secondaryFocus.id!, null)}
+                                className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
+                                title="Remove custom secondary focus"
+                                aria-label="Remove custom secondary focus"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setFocusDialogType('secondary')}
+                                className="text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors p-1 rounded-md hover:bg-muted/50"
+                                title="Customize secondary focus"
+                                aria-label="Customize secondary focus"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )
                           )}
-                        </>
-                      ) : (
-                        "Secondary Focus"
+                        </div>
                       )}
-                    </p>
+                    </div>
+
                     {secondaryFocus ? (
-                      <div className="flex items-start justify-between">
-                        <button onClick={() => goToSystem(secondaryFocus.subjectId, secondaryFocus.id!)} className="text-left group flex-1">
-                          <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                      <button onClick={() => goToSystem(secondaryFocus.subjectId, secondaryFocus.id!)} className="text-left group w-full">
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="font-medium text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors line-clamp-2 text-sm leading-snug">
                             {secondaryFocus.name}
                           </p>
-                        </button>
-                        {!isAutoSecondary && (
-                          <button
-                            onClick={() => setFocus(secondaryFocus.id!, null)}
-                            className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                            aria-label="Remove secondary focus"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                          {isSecondaryOverriddenByRevision && (
+                            <span className="shrink-0 text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-semibold border border-amber-500/20">
+                              {secondaryDaysOverdue > 0 ? `Overdue ${secondaryDaysOverdue}d` : 'Revision Due'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                          {subjects.find(s => s.id === secondaryFocus.subjectId)?.name}
+                        </p>
+                      </button>
                     ) : (
                       <button
                         onClick={() => setFocusDialogType('secondary')}
-                        className="w-full py-3 mt-1 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/50 transition-all flex items-center justify-center gap-2 font-medium"
+                        className="w-full py-3 mt-1 border border-dashed border-amber-500/30 rounded-xl text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all flex items-center justify-center gap-2 font-medium"
                       >
                         <Plus className="w-3 h-3" /> Select System
                       </button>
@@ -632,15 +728,39 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                <div className="grid gap-3">
-                  {subjects.map(subject => (
-                    <SubjectCard
-                      key={subject.id}
-                      subject={subject}
-                      systems={systems.filter(s => s.subjectId === subject.id)}
-                    />
-                  ))}
-                </div>
+                <DragDropContext onDragEnd={handleSubjectDragEnd}>
+                  <Droppable droppableId="subjects-list">
+                    {(provided) => (
+                      <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="grid gap-3"
+                      >
+                        {subjects.map((subject, index) => (
+                          <Draggable
+                            key={subject.id}
+                            draggableId={String(subject.id)}
+                            index={index}
+                          >
+                            {(provided) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                              >
+                                <SubjectCard
+                                  subject={subject}
+                                  systems={systems.filter(s => s.subjectId === subject.id)}
+                                  dragHandleProps={provided.dragHandleProps}
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
               )}
             </section>
 

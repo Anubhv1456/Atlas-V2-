@@ -3,6 +3,7 @@ import Dexie, { Table } from 'dexie';
 export interface Subject {
   id?: number;
   name: string;
+  order?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -156,6 +157,23 @@ export class AtlasDB extends Dexie {
           }
           if (!('order' in sys)) {
              sys['order'] = currentOrder++;
+          }
+        });
+    });
+    // v8: add order field to subjects
+    this.version(8).stores({
+      subjects: '++id, name, order',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus',
+      history: '++id, subjectId, systemId, completedAt',
+      pyqYears: '++id, subjectId',
+    }).upgrade(tx => {
+      let currentOrder = 0;
+      return tx
+        .table('subjects')
+        .toCollection()
+        .modify((sub: Record<string, unknown>) => {
+          if (!('order' in sub)) {
+            sub['order'] = currentOrder++;
           }
         });
     });

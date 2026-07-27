@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+const port = 3000;
 
 export default defineConfig({
   base: '/',
@@ -12,6 +12,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      selfDestroying: true,
       registerType: 'autoUpdate',
       manifestFilename: 'manifest.json',
       manifest: {
@@ -33,7 +34,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
       },
       devOptions: {
-        enabled: true,
+        enabled: false,
       },
     }),
   ],
