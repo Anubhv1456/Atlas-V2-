@@ -11,6 +11,7 @@ import { runSearch } from '@/lib/searchUtils';
 import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
 import { format } from 'date-fns';
 import { StudySystem } from '@/db/database';
+import logoUrl from '@assets/file_00000000828071f594803fb77e46a7c0_1784096743553.png';
 
 // ── Inline result sub-components ──────────────────────────────────────────────
 
@@ -349,13 +350,16 @@ export default function Home() {
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="mb-10 flex items-center justify-between">
           <div className={cn(
-            'transition-all duration-300',
+            'transition-all duration-300 flex items-center gap-3',
             searchOpen ? 'opacity-0 scale-95 pointer-events-none w-0 overflow-hidden' : 'opacity-100 scale-100'
           )}>
-            <h1 className="text-3xl font-semibold text-foreground tracking-tight">{greeting}</h1>
-            <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">
-              Current Streak: <span className="text-foreground">{streak} {streak === 1 ? "Day" : "Days"}</span>
-            </p>
+            <img src={logoUrl} alt="Atlas Logo" className="w-12 h-12 rounded-xl shadow-sm object-cover" />
+            <div>
+              <h1 className="text-3xl font-semibold text-foreground tracking-tight">{greeting}</h1>
+              <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">
+                Current Streak: <span className="text-foreground">{streak} {streak === 1 ? "Day" : "Days"}</span>
+              </p>
+            </div>
           </div>
 
           {/* Search input — shown when open */}
