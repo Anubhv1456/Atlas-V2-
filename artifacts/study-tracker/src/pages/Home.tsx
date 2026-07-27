@@ -351,7 +351,7 @@ export default function Home() {
             'transition-all duration-300 flex items-center gap-3',
             searchOpen ? 'opacity-0 scale-95 pointer-events-none w-0 overflow-hidden' : 'opacity-100 scale-100'
           )}>
-            <img src="/logo.svg?v=3" alt="Atlas Logo" className="w-12 h-12 drop-shadow-md object-contain transition-transform hover:scale-105 active:scale-95" />
+            <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] drop-shadow-md object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
               <h1 className="text-3xl font-semibold text-foreground tracking-tight">{greeting}</h1>
               <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">

@@ -1,10 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 50 312 330">
-  <!-- Left Triangle (Teal) -->
-  <path d="M256,125 L130,350 L256,295 Z" fill="#20b59b" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background (full bleed for maskable) -->
+  <rect width="512" height="512" fill="#14161a" />
   
-  <!-- Right Triangle (Dark Slate) -->
-  <path d="M256,125 L256,295 L382,350 Z" fill="#2c3a4e" />
-  
-  <!-- Top Sparkle / Star -->
-  <path d="M256,80 Q256,110 280,110 Q256,110 256,140 Q256,110 232,110 Q256,110 256,80 Z" fill="#84f3d6" />
+  <g transform="translate(0, 15)">
+    <!-- Left Triangle (Teal) -->
+    <path d="M256,125 L130,350 L256,295 Z" fill="#20b59b" />
+    
+    <!-- Right Triangle (Dark Slate) -->
+    <path d="M256,125 L256,295 L382,350 Z" fill="#2c3a4e" />
+    
+    <!-- Top Sparkle -->
+    <path d="M256,80 Q256,110 280,110 Q256,110 256,140 Q256,110 232,110 Q256,110 256,80 Z" fill="#84f3d6" filter="url(#glow)" />
+    
+    <!-- Text ATLAS -->
+    <text x="256" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="38" font-weight="400" letter-spacing="16" fill="#f8fafc" text-anchor="middle" style="transform: translateX(8px);">ATLAS</text>
+  </g>
 </svg>
