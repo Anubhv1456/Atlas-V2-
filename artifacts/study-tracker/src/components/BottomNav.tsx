@@ -12,21 +12,26 @@ export function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border pb-safe pt-2 px-4 md:sticky md:top-0 md:h-screen md:w-20 md:border-r md:border-t-0 md:flex-col md:px-0 md:pt-8 md:bg-background">
-      <div className="flex justify-around items-center h-14 max-w-md mx-auto md:flex-col md:h-full md:justify-start md:gap-8">
+    <div className="fixed bottom-0 left-0 right-0 h-20 bg-background/80 backdrop-blur-xl border-t border-border z-50 px-6 pb-safe flex items-center justify-around">
+      <div className="w-full max-w-md mx-auto flex items-center justify-between">
         {links.map(({ href, icon: Icon, label }) => {
           const isActive = location === href;
           return (
-            <Link key={href} href={href} className="w-full">
-              <div
-                className={cn(
-                  'flex flex-col items-center justify-center w-full h-full gap-1 text-muted-foreground transition-colors md:w-14 md:h-14 md:rounded-2xl hover:text-primary',
-                  isActive && 'text-primary md:bg-primary/10',
-                )}
-              >
-                <Icon className={cn('w-6 h-6', isActive && 'fill-primary/20 stroke-[2.5]')} />
-                <span className="text-[10px] font-medium md:hidden">{label}</span>
-              </div>
+            <Link key={href} href={href} className="relative flex flex-col items-center gap-1.5 min-w-[64px] group py-2">
+                <div className={cn(
+                  'absolute -top-3 w-12 h-1 rounded-full transition-all duration-300 ease-out',
+                  isActive ? 'bg-primary scale-100 opacity-100' : 'bg-transparent scale-0 opacity-0'
+                )} />
+                <Icon className={cn(
+                  'w-6 h-6 transition-all duration-300 ease-out',
+                  isActive ? 'text-primary drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]' : 'text-muted-foreground group-hover:text-foreground group-hover:scale-110'
+                )} />
+                <span className={cn(
+                  'text-[10px] font-semibold tracking-wide transition-colors duration-300',
+                  isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                )}>
+                  {label}
+                </span>
             </Link>
           );
         })}

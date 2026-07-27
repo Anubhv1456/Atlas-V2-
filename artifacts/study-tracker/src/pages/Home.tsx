@@ -11,8 +11,6 @@ import { runSearch } from '@/lib/searchUtils';
 import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
 import { format } from 'date-fns';
 import { StudySystem } from '@/db/database';
-import logoUrl from '@assets/file_00000000828071f594803fb77e46a7c0_1784096743553.png';
-
 // ── Inline result sub-components ──────────────────────────────────────────────
 
 function StatusBadge({ sys }: { sys: StudySystem }) {
@@ -353,7 +351,7 @@ export default function Home() {
             'transition-all duration-300 flex items-center gap-3',
             searchOpen ? 'opacity-0 scale-95 pointer-events-none w-0 overflow-hidden' : 'opacity-100 scale-100'
           )}>
-            <img src={logoUrl} alt="Atlas Logo" className="w-12 h-12 rounded-xl shadow-sm object-cover" />
+            <img src="/logo.svg?v=3" alt="Atlas Logo" className="w-12 h-12 drop-shadow-md object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
               <h1 className="text-3xl font-semibold text-foreground tracking-tight">{greeting}</h1>
               <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 50 312 330">
+  <!-- Left Triangle (Teal) -->
+  <path d="M256,125 L130,350 L256,295 Z" fill="#20b59b" />
+  
+  <!-- Right Triangle (Dark Slate) -->
+  <path d="M256,125 L256,295 L382,350 Z" fill="#2c3a4e" />
+  
+  <!-- Top Sparkle / Star -->
+  <path d="M256,80 Q256,110 280,110 Q256,110 256,140 Q256,110 232,110 Q256,110 256,80 Z" fill="#84f3d6" />
+</svg>
