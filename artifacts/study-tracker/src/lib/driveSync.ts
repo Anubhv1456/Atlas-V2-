@@ -116,10 +116,16 @@ export const getAccessToken = async (): Promise<string | null> => {
 const BACKUP_FILENAME = 'atlas_backup.json';
 
 async function findBackupFileId(token: string): Promise<string | null> {
-  const query = encodeURIComponent(`name = '${BACKUP_FILENAME}' and 'appDataFolder' in parents`);
+  const query = encodeURIComponent(`name = '${BACKUP_FILENAME}'`);
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+  
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || "Failed to search Google Drive");
+  }
+
   const data = await res.json();
   if (data.files && data.files.length > 0) {
     return data.files[0].id;
@@ -187,12 +193,13 @@ export async function downloadFromDrive(token: string) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to download from Google Drive.");
+    const err = await res.json();
+    throw new Error(err.error?.message || "Failed to download from Google Drive.");
   }
 
   const data = await res.json();
   if (!data.subjects || !data.systems) {
-    throw new Error('Invalid backup format.');
+    throw new Error('Invalid backup format received from Cloud.');
   }
 
   await importData(data);
