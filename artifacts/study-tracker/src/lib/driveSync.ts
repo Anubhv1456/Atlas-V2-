@@ -3,12 +3,80 @@ import { exportData, importData } from '../db/database';
 const CLIENT_ID = '983844880865-imtckeuh0e5a7t0ongkg2ofe3gelbtmi.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
-let tokenClient: any;
+const STORAGE_USER_KEY = 'atlas_google_user';
+const STORAGE_TOKEN_KEY = 'atlas_google_token';
+const STORAGE_EXPIRY_KEY = 'atlas_google_token_expiry';
+
+let tokenClient: any = null;
 let accessToken: string | null = null;
+let tokenExpiry: number = 0;
 let currentUser: any = null;
 
 let authStateListener: ((user: any, token: string) => void) | null = null;
 let authFailureListener: (() => void) | null = null;
+
+// Helper to save session to localStorage
+function saveSession(user: any, token: string, expiresInSeconds: number = 3600) {
+  currentUser = user;
+  accessToken = token;
+  tokenExpiry = Date.now() + (expiresInSeconds - 60) * 1000; // 1 min buffer
+
+  try {
+    localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+    localStorage.setItem(STORAGE_TOKEN_KEY, token);
+    localStorage.setItem(STORAGE_EXPIRY_KEY, String(tokenExpiry));
+  } catch (err) {
+    console.error('Failed to save auth session to localStorage:', err);
+  }
+}
+
+// Helper to clear session from localStorage
+function clearSession() {
+  currentUser = null;
+  accessToken = null;
+  tokenExpiry = 0;
+
+  try {
+    localStorage.removeItem(STORAGE_USER_KEY);
+    localStorage.removeItem(STORAGE_TOKEN_KEY);
+    localStorage.removeItem(STORAGE_EXPIRY_KEY);
+  } catch (err) {
+    console.error('Failed to clear auth session from localStorage:', err);
+  }
+}
+
+// Helper to restore session from localStorage
+function restoreSession(): { user: any; token: string | null } {
+  if (currentUser) {
+    return { user: currentUser, token: accessToken };
+  }
+
+  try {
+    const rawUser = localStorage.getItem(STORAGE_USER_KEY);
+    const storedToken = localStorage.getItem(STORAGE_TOKEN_KEY);
+    const storedExpiry = localStorage.getItem(STORAGE_EXPIRY_KEY);
+
+    if (rawUser) {
+      currentUser = JSON.parse(rawUser);
+      if (storedToken) {
+        const exp = Number(storedExpiry || '0');
+        if (exp > Date.now()) {
+          accessToken = storedToken;
+          tokenExpiry = exp;
+        } else {
+          // Token expired, but user profile is kept
+          accessToken = null;
+          tokenExpiry = 0;
+        }
+      }
+      return { user: currentUser, token: accessToken };
+    }
+  } catch (err) {
+    console.error('Error restoring auth session:', err);
+  }
+
+  return { user: null, token: null };
+}
 
 const loadGis = () => {
   return new Promise<void>((resolve) => {
@@ -25,34 +93,35 @@ const loadGis = () => {
   });
 };
 
-export const initAuth = (
-  onAuthSuccess?: (user: any, token: string) => void,
-  onAuthFailure?: () => void
-) => {
-  authStateListener = onAuthSuccess || null;
-  authFailureListener = onAuthFailure || null;
-  
-  loadGis().then(() => {
+const setupTokenClient = async () => {
+  await loadGis();
+  if (!tokenClient && window.google?.accounts?.oauth2) {
     tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPES,
       callback: async (response: any) => {
         if (response.error !== undefined) {
-          throw response;
+          console.error('GIS token error:', response);
+          if (authFailureListener) authFailureListener();
+          return;
         }
-        accessToken = response.access_token;
-        // Fetch user info
+        const token = response.access_token;
+        const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
+
         try {
           const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: { Authorization: `Bearer ${token}` }
           });
           const data = await res.json();
-          currentUser = {
+          const user = {
             displayName: data.name,
             email: data.email,
             photoURL: data.picture,
             uid: data.sub
           };
+
+          saveSession(user, token, expiresIn);
+
           if (authStateListener) authStateListener(currentUser, accessToken!);
         } catch (err) {
           console.error('Error fetching user info', err);
@@ -60,6 +129,31 @@ export const initAuth = (
         }
       },
     });
+  }
+};
+
+export const initAuth = (
+  onAuthSuccess?: (user: any, token: string) => void,
+  onAuthFailure?: () => void
+) => {
+  authStateListener = onAuthSuccess || null;
+  authFailureListener = onAuthFailure || null;
+
+  // Restore existing session immediately if available
+  const { user, token } = restoreSession();
+  if (user && authStateListener) {
+    authStateListener(user, token || '');
+  }
+
+  setupTokenClient().then(() => {
+    // If we have a user but token is expired or missing, try silent token prompt
+    if (user && !token && tokenClient) {
+      try {
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch {
+        // Silent request failed; user can re-auth when backing up
+      }
+    }
   });
 
   return () => {
@@ -69,45 +163,88 @@ export const initAuth = (
 };
 
 export const googleSignIn = async (): Promise<{ user: any; accessToken: string } | null> => {
-  if (!tokenClient) await loadGis();
+  await setupTokenClient();
   return new Promise((resolve, reject) => {
+    if (!tokenClient) {
+      reject(new Error('Google Identity Services client failed to load.'));
+      return;
+    }
+
     tokenClient.callback = async (response: any) => {
       if (response.error !== undefined) {
-        reject(response.error);
+        reject(new Error(response.error_description || response.error));
         return;
       }
-      accessToken = response.access_token;
+      const token = response.access_token;
+      const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
+
       try {
         const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${accessToken}` }
+          headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        currentUser = {
+        const user = {
           displayName: data.name,
           email: data.email,
           photoURL: data.picture,
           uid: data.sub
         };
+
+        saveSession(user, token, expiresIn);
+
         if (authStateListener) authStateListener(currentUser, accessToken!);
         resolve({ user: currentUser, accessToken: accessToken! });
       } catch (err) {
         reject(err);
       }
     };
+
     tokenClient.requestAccessToken({ prompt: 'consent' });
   });
 };
 
 export const googleSignOut = async () => {
   if (accessToken) {
-    window.google?.accounts?.oauth2?.revoke(accessToken, () => {});
+    try {
+      window.google?.accounts?.oauth2?.revoke(accessToken, () => {});
+    } catch {
+      // ignore
+    }
   }
-  accessToken = null;
-  currentUser = null;
+  clearSession();
   if (authFailureListener) authFailureListener();
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
+  restoreSession();
+  if (accessToken && tokenExpiry > Date.now()) {
+    return accessToken;
+  }
+
+  // If we have currentUser but token is expired or missing, try requesting silently
+  if (currentUser && tokenClient) {
+    return new Promise((resolve) => {
+      const prevCallback = tokenClient.callback;
+      tokenClient.callback = (response: any) => {
+        tokenClient.callback = prevCallback;
+        if (response && response.access_token) {
+          const token = response.access_token;
+          const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
+          saveSession(currentUser, token, expiresIn);
+          resolve(token);
+        } else {
+          resolve(null);
+        }
+      };
+      try {
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch {
+        tokenClient.callback = prevCallback;
+        resolve(null);
+      }
+    });
+  }
+
   return accessToken;
 };
 
@@ -134,7 +271,8 @@ async function findBackupFileId(token: string): Promise<string | null> {
 }
 
 export async function uploadToDrive(token: string) {
-  if (!currentUser) throw new Error("Must be logged in to backup.");
+  const { user } = restoreSession();
+  if (!user && !currentUser) throw new Error("Must be logged in to backup.");
   
   const dbData = await exportData();
   const fileContent = JSON.stringify(dbData);
@@ -181,7 +319,8 @@ export async function uploadToDrive(token: string) {
 }
 
 export async function downloadFromDrive(token: string) {
-  if (!currentUser) throw new Error("Must be logged in to restore.");
+  const { user } = restoreSession();
+  if (!user && !currentUser) throw new Error("Must be logged in to restore.");
   
   const fileId = await findBackupFileId(token);
   if (!fileId) {
