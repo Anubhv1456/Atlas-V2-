@@ -1,14 +1,19 @@
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 
 import { BottomNav } from '@/components/BottomNav';
+import { CommandPalette } from '@/components/CommandPalette';
 import Home from '@/pages/Home';
 import SubjectDetail from '@/pages/SubjectDetail';
 import Timeline from '@/pages/Timeline';
+import Analytics from '@/pages/Analytics';
 import Settings from '@/pages/Settings';
+import { checkAndRunAutoBackup } from '@/lib/autoBackup';
 
 const queryClient = new QueryClient();
 
@@ -39,6 +44,7 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/subjects/:id" component={SubjectDetail} />
           <Route path="/timeline" component={Timeline} />
+          <Route path="/analytics" component={Analytics} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
         </Switch>
@@ -48,13 +54,19 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    checkAndRunAutoBackup();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <Router />
+          <CommandPalette />
         </WouterRouter>
         <Toaster />
+        <SonnerToaster position="top-center" richColors />
       </TooltipProvider>
     </QueryClientProvider>
   );

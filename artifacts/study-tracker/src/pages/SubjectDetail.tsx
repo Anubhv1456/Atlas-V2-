@@ -10,9 +10,10 @@ import { SystemCard } from '@/components/SystemCard';
 import { AddDialog } from '@/components/AddDialog';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PYQYear } from '@/db/database';
+import { ScoreLogModal } from '@/components/ScoreLogModal';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Trash2, Edit2,
-  LayoutList, Lock, Check, BookOpen,
+  LayoutList, Lock, Check, BookOpen, Award,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -39,6 +40,7 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
   const [editValue,   setEditValue]   = useState('');
   const [pyqToDelete, setPyqToDelete] = useState<PYQYear | null>(null);
   const [showPYQDeleteConfirm, setShowPYQDeleteConfirm] = useState(false);
+  const [scoreModalPyq, setScoreModalPyq]                 = useState<PYQYear | null>(null);
 
   const completed = years.filter(y => y.completed).length;
   const total     = years.length;
@@ -69,7 +71,11 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
   };
 
   const handleToggle = (year: PYQYear) => {
-    togglePYQYear(year.id!, subjectId, subjectName, year.year, year.completed);
+    const wasCompleted = year.completed;
+    togglePYQYear(year.id!, subjectId, subjectName, year.year, wasCompleted);
+    if (!wasCompleted) {
+      setScoreModalPyq(year);
+    }
   };
 
   return (
@@ -137,6 +143,15 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
                   )}>
                     {year.year}
                   </span>
+
+                  {/* Log PYQ Score */}
+                  <button
+                    onClick={() => setScoreModalPyq(year)}
+                    title="Log PYQ Score"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-primary hover:bg-muted transition-colors"
+                  >
+                    <Award className="w-3.5 h-3.5 text-primary" />
+                  </button>
 
                   {/* Edit */}
                   <button
@@ -217,6 +232,16 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Score log modal for PYQ year ────────────────────────────────────── */}
+      <ScoreLogModal
+        isOpen={Boolean(scoreModalPyq)}
+        onClose={() => setScoreModalPyq(null)}
+        initialType="pyq"
+        initialSubjectId={subjectId}
+        initialPyqYearId={scoreModalPyq?.id}
+        initialTitle={scoreModalPyq ? `${subjectName} - ${scoreModalPyq.year} PYQ` : `${subjectName} PYQ`}
+      />
     </div>
   );
 }

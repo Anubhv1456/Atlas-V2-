@@ -1,15 +1,16 @@
 import { useRef, useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus, updateSubjectsOrder } from '@/db/hooks';
+import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
-import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil } from 'lucide-react';
+import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil, Flame, Award, Sparkles, TrendingUp } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
 import { runSearch } from '@/lib/searchUtils';
-import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
+import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calculateDecayScore, daysOverdue } from '@/db/revisionEngine';
 import { format } from 'date-fns';
 import { StudySystem } from '@/db/database';
 // ── Inline result sub-components ──────────────────────────────────────────────
@@ -53,6 +54,7 @@ export default function Home() {
   const subjects = useSubjects();
   const streak = useCurrentStreak();
   const systems  = useAllSystems();
+  const pyqs = useAllPYQs();
   const [, setLocation] = useLocation();
   const [showAddSubject, setShowAddSubject] = useState(false);
 
@@ -145,15 +147,17 @@ export default function Home() {
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
+  // All revisions due today or overdue
+  const allDueRevisions = systems.filter(s => isRevisionDue(s));
+
   // Revisions due or overdue (excluding system currently set as primary focus)
-  const dueRevisions = systems.filter(s => 
-    s.nextRevisionDate && 
-    new Date(s.nextRevisionDate) <= todayEnd &&
+  const unsortedDueRevisions = systems.filter(s => 
+    isRevisionDue(s) &&
     s.id !== primaryFocus?.id
   );
 
-  // Highest priority revision: the one due for the longest (earliest nextRevisionDate)
-  dueRevisions.sort((a, b) => new Date(a.nextRevisionDate!).getTime() - new Date(b.nextRevisionDate!).getTime());
+  // Highest priority revision sorted strictly by Knowledge Decay factor & overdue duration
+  const dueRevisions = sortSystemsByRevisionPriority(unsortedDueRevisions, now);
 
   let customSecondary = systems.find(s => s.focus === 'secondary');
   let secondaryFocus: StudySystem | undefined = undefined;
@@ -190,198 +194,177 @@ export default function Home() {
     }
   }
 
-  // ── Knowledge Insights ──────────────────────────────────────────────────────
+  // ── Smart Dynamic Knowledge Insights ───────────────────────────────────────
+  interface Insight {
+    id: string;
+    confidence: number;
+    badge: string;
+    badgeClass: string;
+    icon: JSX.Element;
+    text: JSX.Element;
+    actionLabel?: string;
+    onAction?: () => void;
+  }
+
   const insights = useMemo(() => {
     if (systems.length === 0 || subjects.length === 0) return [];
-    
-    // An insight exists to eliminate a decision.
-    // If it does not change what the user should do next, it is not an insight.
-    
-    interface Insight {
-      id: string;
-      confidence: number;
-      icon: JSX.Element;
-      text: JSX.Element;
-    }
-    
+
     const candidates: Insight[] = [];
     const now = new Date();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59, 59);
-    
-    const overdueSystems = systems.filter(s => isRevisionOverdue(s));
-    const dueTomorrowSystems = systems.filter(s => s.nextRevisionDate && new Date(s.nextRevisionDate) > todayEnd && new Date(s.nextRevisionDate) <= tomorrowEnd);
-    const allCompletedSystems = systems.filter(s => s.contentCompleted && s.qbankDone);
-    
-    // 1. REVISIONS & BACKLOG (High Confidence)
-    // Mutually exclusive: We only generate ONE revision-related insight.
-    if (overdueSystems.length > 0) {
-      const overdueCountsBySubject = subjects.map(sub => ({
-        sub, count: overdueSystems.filter(s => s.subjectId === sub.id).length
-      })).sort((a, b) => b.count - a.count);
-      
-      const biggestOverdue = overdueCountsBySubject[0];
-      
-      if (overdueSystems.length === 1) {
-        candidates.push({
-          id: 'overdue-one',
-          confidence: 90,
-          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span>Clearing today's single overdue revision will completely eliminate your revision backlog.</span>
-        });
-      } else if (biggestOverdue && biggestOverdue.count > 0 && biggestOverdue.count === overdueSystems.length) {
-        candidates.push({
-          id: 'overdue-single-subject',
-          confidence: 95,
-          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span><strong className="text-foreground">{biggestOverdue.sub.name}'s</strong> overdue revisions are your highest priority. Clearing them today removes your entire backlog.</span>
-        });
-      } else if (biggestOverdue && biggestOverdue.count > 0 && biggestOverdue.count / overdueSystems.length >= 0.5) {
-        const pct = Math.round((biggestOverdue.count / overdueSystems.length) * 100);
-        candidates.push({
-          id: 'overdue-dominant',
-          confidence: 92,
-          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span>Completing the overdue revisions in <strong className="text-foreground">{biggestOverdue.sub.name}</strong> will remove {pct}% of your entire backlog.</span>
-        });
-      } else {
-        candidates.push({
-          id: 'overdue-many',
-          confidence: 88,
-          icon: <AlertCircle className="w-4 h-4 text-destructive" />,
-          text: <span>Clearing your <strong className="text-foreground">{overdueSystems.length}</strong> overdue revisions should be your highest priority to prevent further memory decay.</span>
-        });
-      }
-    } else if (dueTomorrowSystems.length > 0) {
+
+    // 1. KNOWLEDGE DECAY & REVISION DEBT (Highest Priority: 98-100)
+    const sortedByDecay = sortSystemsByRevisionPriority(systems, now);
+    const topDecaySystem = sortedByDecay[0];
+    if (topDecaySystem && calculateDecayScore(topDecaySystem, now) > 0) {
+      const sub = subjects.find(s => s.id === topDecaySystem.subjectId);
+      const overdue = daysOverdue(topDecaySystem, now);
+      const decayScore = calculateDecayScore(topDecaySystem, now);
+
       candidates.push({
-        id: 'due-tomorrow',
-        confidence: 75,
-        icon: <Clock className="w-4 h-4 text-amber-500" />,
-        text: <span>Your <strong className="text-foreground">{dueTomorrowSystems.length}</strong> revision{dueTomorrowSystems.length > 1 ? 's' : ''} due tomorrow should take priority before starting new content.</span>
+        id: 'decay-critical',
+        confidence: 98 + Math.min(decayScore, 2),
+        badge: overdue > 0 ? 'CRITICAL DECAY' : 'REVISION DUE',
+        badgeClass: 'bg-destructive/10 text-destructive border-destructive/20',
+        icon: <AlertCircle className="w-4 h-4 text-destructive shrink-0" />,
+        text: (
+          <span>
+            <strong className="text-foreground">{topDecaySystem.name}</strong> ({sub?.name}) has accumulated high recall decay ({overdue > 0 ? `${overdue}d overdue` : 'due today'}, {topDecaySystem.status} confidence).
+          </span>
+        ),
+        actionLabel: 'Review Now',
+        onAction: () => setLocation(`/subjects/${topDecaySystem.subjectId}?highlight=${topDecaySystem.id}`),
       });
     }
 
-    // 2. MILESTONES & PROGRESS (Medium-High Confidence)
-    // Mutually exclusive: We only generate the single most impactful milestone across all subjects.
-    let bestMilestone: Insight | null = null;
-    let subjectsAbove75 = 0;
-    
-    // 3. NEGLECT / INACTIVITY (Medium Confidence)
-    // Mutually exclusive: We only highlight the single most neglected subject.
-    let worstInactivity: Insight & { days: number } | null = null;
-    
-    subjects.forEach(sub => {
-      const subSystems = systems.filter(s => s.subjectId === sub.id);
-      if (subSystems.length === 0) return;
-      
-      const completeCount = subSystems.filter(s => s.contentCompleted && s.qbankDone).length;
-      const total = subSystems.length;
-      const pct = completeCount / total;
-      const oneMorePct = (completeCount + 1) / total;
-      
-      if (pct >= 0.75) subjectsAbove75++;
-      
-      // Milestones
-      if (completeCount < total) {
-        if (completeCount === total - 1 && total > 1) {
-          const incompleteSystem = subSystems.find(s => !(s.contentCompleted && s.qbankDone));
-          const candidate: Insight = {
-            id: `milestone-100-${sub.id}`,
-            confidence: 85,
-            icon: <Target className="w-4 h-4 text-primary" />,
-            text: <span>You are exactly one system (<strong className="text-foreground">{incompleteSystem?.name}</strong>) away from completely mastering {sub.name}.</span>
-          };
-          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
-        } else if (pct < 0.75 && oneMorePct >= 0.75) {
-          const candidate: Insight = {
-            id: `milestone-75-${sub.id}`,
-            confidence: 75,
-            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
-            text: <span>One more completed system will make <strong className="text-foreground">{sub.name}</strong> your {subjectsAbove75 === 0 ? 'first' : 'next'} subject above 75%.</span>
-          };
-          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
-        } else if (pct < 0.5 && oneMorePct >= 0.5) {
-          const candidate: Insight = {
-            id: `milestone-50-${sub.id}`,
-            confidence: 65,
-            icon: <ArrowUpRight className="w-4 h-4 text-primary" />,
-            text: <span>Completing one more system will bring <strong className="text-foreground">{sub.name}</strong> to exactly half completion.</span>
-          };
-          if (!bestMilestone || candidate.confidence > bestMilestone.confidence) bestMilestone = candidate;
-        }
+    // 2. PRIMARY FOCUS STEP AWAY (Confidence: 94)
+    if (primaryFocus && !(primaryFocus.contentCompleted && primaryFocus.qbankDone)) {
+      const sub = subjects.find(s => s.id === primaryFocus.subjectId);
+      const missingTask = !primaryFocus.contentCompleted ? 'Content' : 'QBank';
+      candidates.push({
+        id: 'primary-focus-near',
+        confidence: 94,
+        badge: 'PRIMARY FOCUS',
+        badgeClass: 'bg-primary/10 text-primary border-primary/20',
+        icon: <Target className="w-4 h-4 text-primary shrink-0" />,
+        text: (
+          <span>
+            Primary Focus <strong className="text-foreground">{primaryFocus.name}</strong> ({sub?.name}) is 1 task away from mastery ({missingTask} pending).
+          </span>
+        ),
+        actionLabel: 'Complete Task',
+        onAction: () => setLocation(`/subjects/${primaryFocus.subjectId}?highlight=${primaryFocus.id}`),
+      });
+    }
+
+    // 3. SUBJECT COVERAGE IMBALANCE (Confidence: 88)
+    const subjectStats = subjects.map(sub => {
+      const subSys = systems.filter(s => s.subjectId === sub.id);
+      const doneCount = subSys.filter(s => s.contentCompleted && s.qbankDone).length;
+      const totalCount = subSys.length;
+      const ratio = totalCount > 0 ? doneCount / totalCount : 0;
+      return { sub, doneCount, totalCount, ratio };
+    }).filter(s => s.totalCount > 0);
+
+    if (subjectStats.length >= 2) {
+      subjectStats.sort((a, b) => b.ratio - a.ratio);
+      const highest = subjectStats[0];
+      const lowest = subjectStats[subjectStats.length - 1];
+
+      if (highest.ratio >= 0.6 && lowest.ratio <= 0.25 && highest.sub.id !== lowest.sub.id) {
+        candidates.push({
+          id: 'coverage-imbalance',
+          confidence: 88,
+          badge: 'COVERAGE GAP',
+          badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+          icon: <Activity className="w-4 h-4 text-amber-500 shrink-0" />,
+          text: (
+            <span>
+              Study focus is skewed: <strong className="text-foreground">{highest.sub.name}</strong> is {Math.round(highest.ratio * 100)}% complete, while <strong className="text-foreground">{lowest.sub.name}</strong> lags at {Math.round(lowest.ratio * 100)}%.
+            </span>
+          ),
+          actionLabel: `Focus ${lowest.sub.name}`,
+          onAction: () => setLocation(`/subjects/${lowest.sub.id}`),
+        });
       }
-      
-      // Inactivity
-      if (pct < 1 && pct > 0) {
-        const lastActivity = Math.max(...subSystems.map(s => new Date(s.updatedAt).getTime()));
-        const daysInactive = Math.floor((now.getTime() - lastActivity) / (1000 * 3600 * 24));
-        if (daysInactive >= 10) {
-          if (!worstInactivity || daysInactive > worstInactivity.days) {
-            worstInactivity = {
-              id: `inactive-${sub.id}`,
-              confidence: 80,
-              icon: <Clock className="w-4 h-4 text-muted-foreground" />,
-              text: <span><strong className="text-foreground">{sub.name}</strong> hasn't been studied for {daysInactive} days. Reviewing it today will prevent knowledge loss.</span>,
-              days: daysInactive
-            };
+    }
+
+    // 4. PYQ READINESS GAP (Confidence: 84)
+    if (pyqs.length > 0) {
+      for (const sub of subjects) {
+        const subSys = systems.filter(s => s.subjectId === sub.id);
+        const subPYQs = pyqs.filter(p => p.subjectId === sub.id);
+        if (subSys.length > 0 && subPYQs.length > 0) {
+          const sysRatio = subSys.filter(s => s.contentCompleted && s.qbankDone).length / subSys.length;
+          const pyqRatio = subPYQs.filter(p => p.completed).length / subPYQs.length;
+          if (sysRatio >= 0.5 && pyqRatio <= 0.3) {
+            candidates.push({
+              id: `pyq-gap-${sub.id}`,
+              confidence: 84,
+              badge: 'EXAM READINESS',
+              badgeClass: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
+              icon: <BookOpen className="w-4 h-4 text-sky-500 shrink-0" />,
+              text: (
+                <span>
+                  You completed {Math.round(sysRatio * 100)}% of <strong className="text-foreground">{sub.name}</strong> topics but solved only {Math.round(pyqRatio * 100)}% of past year papers.
+                </span>
+              ),
+              actionLabel: 'Solve PYQs',
+              onAction: () => setLocation(`/subjects/${sub.id}`),
+            });
+            break;
           }
         }
       }
-    });
+    }
 
-    if (bestMilestone) candidates.push(bestMilestone);
-    if (worstInactivity) candidates.push(worstInactivity);
-
-    // 4. WEAK / CELEBRATORY (Low Confidence)
-    const strongSubjects = subjects.filter(sub => {
+    // 5. SUBJECT MASTERY MILESTONE (Confidence: 82)
+    for (const sub of subjects) {
       const subSys = systems.filter(s => s.subjectId === sub.id);
-      return subSys.length > 0 && subSys.every(s => s.status === 'Strong' && s.contentCompleted && s.qbankDone);
-    });
-    
-    if (strongSubjects.length > 0) {
-      const sub = strongSubjects[0];
-      candidates.push({
-        id: `mastery-${sub.id}`,
-        confidence: 45, // Low confidence because it doesn't drive a new action
-        icon: <CheckCircle className="w-4 h-4 text-[hsl(var(--gold))]" />,
-        text: <span>Through consistent effort, <strong className="text-foreground">{sub.name}</strong> has now become one of your strongest subjects.</span>
-      });
-    }
-
-    if (overdueSystems.length === 0 && allCompletedSystems.length > 0) {
-      candidates.push({
-        id: 'consistency',
-        confidence: 40,
-        icon: <CheckCircle className="w-4 h-4 text-green-500" />,
-        text: <span>You are currently maintaining excellent revision consistency with absolutely no overdue systems.</span>
-      });
-    }
-
-    // 5. FILTER AND SELECT
-    // Confidence < 40: Never generate
-    // Confidence 40-69: Don't show unless nothing better exists
-    // Confidence 70-89: Show if space exists
-    // Confidence 90-100: Must show
-
-    const validCandidates = candidates
-      .filter(c => c.confidence >= 40)
-      .sort((a, b) => b.confidence - a.confidence);
-    
-    const finalInsights: Insight[] = [];
-    
-    for (const insight of validCandidates) {
-      if (insight.confidence >= 90) {
-        finalInsights.push(insight);
-      } else if (insight.confidence >= 70 && finalInsights.length < 2) {
-        finalInsights.push(insight);
-      } else if (insight.confidence >= 40 && finalInsights.length === 0) {
-        finalInsights.push(insight);
+      if (subSys.length > 1) {
+        const incomplete = subSys.filter(s => !(s.contentCompleted && s.qbankDone));
+        if (incomplete.length === 1) {
+          const target = incomplete[0];
+          candidates.push({
+            id: `milestone-${sub.id}`,
+            confidence: 82,
+            badge: 'MASTERY MILESTONE',
+            badgeClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+            icon: <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />,
+            text: (
+              <span>
+                Only 1 system (<strong className="text-foreground">{target.name}</strong>) left to reach 100% completion in <strong className="text-foreground">{sub.name}</strong>!
+              </span>
+            ),
+            actionLabel: 'Finish Subject',
+            onAction: () => setLocation(`/subjects/${sub.id}?highlight=${target.id}`),
+          });
+          break;
+        }
       }
     }
 
-    // Cap at 2 insights max to maintain extreme focus and eliminate noise
-    return finalInsights.slice(0, 2);
-  }, [systems, subjects]);
+    // 6. PERFECT MOMENTUM & STREAK (Confidence: 70)
+    const overdueCount = systems.filter(s => isRevisionOverdue(s)).length;
+    if (overdueCount === 0 && streak > 0) {
+      candidates.push({
+        id: 'perfect-momentum',
+        confidence: 70,
+        badge: 'PEAK MOMENTUM',
+        badgeClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+        icon: <Flame className="w-4 h-4 text-amber-500 shrink-0" />,
+        text: (
+          <span>
+            Zero overdue revisions and an active <strong className="text-foreground">{streak}-day streak</strong>! Your memory recall engine is running at peak efficiency.
+          </span>
+        ),
+        actionLabel: 'View Timeline',
+        onAction: () => setLocation('/timeline'),
+      });
+    }
+
+    candidates.sort((a, b) => b.confidence - a.confidence);
+    return candidates.slice(0, 2);
+  }, [systems, subjects, pyqs, primaryFocus, streak, setLocation]);
 
   const handleSetFocus = (systemId: number) => {
     if (focusDialogType) {
@@ -404,17 +387,17 @@ export default function Home() {
     <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="relative z-10 flex-1 flex flex-col">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <header className="mb-10 flex items-center justify-between">
+        <header className="mb-8 flex items-center justify-between">
           <div className={cn(
-            'transition-all duration-300 flex items-center gap-3',
+            'transition-all duration-300 flex items-center gap-3.5',
             searchOpen ? 'opacity-0 scale-95 pointer-events-none w-0 overflow-hidden' : 'opacity-100 scale-100'
           )}>
-            <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] drop-shadow-md object-contain transition-transform hover:scale-105 active:scale-95" />
+            <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] shadow-sm border border-border/50 object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
-              <h1 className="text-3xl font-semibold text-foreground tracking-tight">{greeting}</h1>
-              <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">
-                Current Streak: <span className="text-foreground">{streak} {streak === 1 ? "Day" : "Days"}</span>
-              </p>
+              <div className="flex items-center gap-1.5 text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">
+                <Sparkles className="w-3 h-3" /> Active Recall Dashboard
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{greeting}</h1>
             </div>
           </div>
 
@@ -431,8 +414,8 @@ export default function Home() {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
-                placeholder="Search library..."
-                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg bg-card border border-border focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-sans text-foreground"
+                placeholder="Search subjects, systems, or tags..."
+                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl bg-card border border-border focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-sans text-foreground shadow-sm"
               />
             </div>
           </div>
@@ -440,7 +423,7 @@ export default function Home() {
           {/* Icon toggle */}
           <button
             onClick={searchOpen ? closeSearch : openSearch}
-            className="ml-4 shrink-0 w-10 h-10 rounded-full flex items-center justify-center hover:bg-muted/50 transition-colors text-muted-foreground"
+            className="ml-3 shrink-0 w-10 h-10 rounded-xl border border-border/60 bg-card flex items-center justify-center hover:bg-muted/50 transition-colors text-muted-foreground shadow-sm"
             aria-label={searchOpen ? 'Close search' : 'Open search'}
           >
             {searchOpen
@@ -516,6 +499,74 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* ── KPI Overview Grid ────────────────────────────────────────────── */}
+            <section className="mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Active Streak */}
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Streak</span>
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                      <Flame className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                      {streak} <span className="text-xs font-sans font-normal text-muted-foreground">{streak === 1 ? 'day' : 'days'}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Consecutive active study</div>
+                  </div>
+                </div>
+
+                {/* Overall Completion */}
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Completion</span>
+                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                      {overallProgress}%
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{completedTasks}/{totalTasks} tasks done</div>
+                  </div>
+                </div>
+
+                {/* Strong Systems */}
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Strong</span>
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                      <Award className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                      {strongSystems} <span className="text-xs font-sans font-normal text-muted-foreground">/ {systems.length}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">High confidence topics</div>
+                  </div>
+                </div>
+
+                {/* Due Revisions */}
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Due Today</span>
+                    <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                      {allDueRevisions.length}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Revisions scheduled</div>
+                  </div>
+                </div>
+              </div>
+            </section>
             {/* ── Focus for Today ───────────────────────── */}
             <section className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
@@ -654,59 +705,42 @@ export default function Home() {
             {insights.length > 0 && (
               <section className="mb-12">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-3.5 h-3.5" /> Insights
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> AI Knowledge Insights
                 </h2>
-                <div className="grid gap-2">
+                <div className="grid gap-3">
                   {insights.map((insight) => (
-                    <div key={insight.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/50 text-sm">
-                      <div className="shrink-0 p-1.5 bg-background rounded-md border border-border/50 shadow-sm">
-                        {insight.icon}
+                    <div
+                      key={insight.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-card rounded-2xl border border-border/80 shadow-sm transition-all hover:border-primary/30"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 p-2 bg-muted/50 rounded-xl border border-border/50">
+                          {insight.icon}
+                        </div>
+                        <div className="space-y-1">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border inline-block ${insight.badgeClass}`}>
+                            {insight.badge}
+                          </span>
+                          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                            {insight.text}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-muted-foreground leading-snug">
-                        {insight.text}
-                      </p>
+                      {insight.actionLabel && insight.onAction && (
+                        <button
+                          onClick={insight.onAction}
+                          className="shrink-0 self-end sm:self-center px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-xs transition-colors flex items-center gap-1 border border-primary/20 cursor-pointer"
+                        >
+                          {insight.actionLabel} <ArrowUpRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* ── Progress Rings (Quiet Confidence) ───────────────────────── */}
-            <section className="mb-12 flex justify-center gap-10">
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative w-24 h-24">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" className="stroke-muted" strokeWidth="4" />
-                    <circle 
-                      cx="50" cy="50" r="45" fill="none" className="stroke-primary transition-all duration-1000 ease-in-out" 
-                      strokeWidth="4" strokeLinecap="round"
-                      strokeDasharray="283" strokeDashoffset={283 - (283 * overallProgress) / 100}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-xl font-mono text-foreground">{overallProgress}%</span>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Completion</span>
-              </div>
 
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative w-24 h-24">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" className="stroke-muted" strokeWidth="4" />
-                    <circle 
-                      cx="50" cy="50" r="45" fill="none" style={{ stroke: 'hsl(var(--gold))' }} className="transition-all duration-1000 ease-in-out" 
-                      strokeWidth="4" strokeLinecap="round"
-                      strokeDasharray="283" strokeDashoffset={systems.length ? 283 - (283 * strongSystems) / systems.length : 283}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-xl font-mono text-foreground">{systems.length ? Math.round((strongSystems / systems.length) * 100) : 0}%</span>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Strong</span>
-              </div>
-            </section>
 
             {/* ── Subjects list ─────────────────────────────────────────────── */}
             <section className="flex-1">

@@ -17,9 +17,10 @@ import {
   getDay,
   isSameMonth,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, Clock, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, Clock, AlertCircle, CheckCircle2, Sparkles, Filter, Activity, TrendingUp, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { isRevisionUpcoming, isRevisionOverdue, daysOverdue } from '@/db/revisionEngine';
+import { Badge } from '@/components/ui/badge';
+import { isRevisionUpcoming, isRevisionOverdue, isRevisionDueToday, daysOverdue, sortSystemsByRevisionPriority } from '@/db/revisionEngine';
 
 // ── Map a HistoryEntry → completed TimelineEvent ──────────────────────────────
 function historyToEvent(h: HistoryEntry): TimelineEvent {
@@ -29,8 +30,6 @@ function historyToEvent(h: HistoryEntry): TimelineEvent {
     pyqsDone:    'pyqsDone',
     revision:    'revisionSystem',
   };
-  // PYQ entries store the full label as taskLabel (e.g. "Medicine PYQs 2022")
-  // and have no systemName, so use taskLabel directly as entityName.
   const entityName = h.taskKey === 'pyqsDone'
     ? h.taskLabel
     : `${h.systemName} ${h.taskLabel}`;
@@ -64,11 +63,11 @@ function systemToRevisionEvent(
 
 // ── Visual config ─────────────────────────────────────────────────────────────
 const EVENT_STYLE: Record<TimelineEvent['eventType'], { bg: string; text: string; Icon: typeof BookOpen }> = {
-  contentCompleted: { bg: 'bg-transparent border border-sky-500/30',          text: 'text-sky-500',          Icon: BookOpen },
-  qbankDone:        { bg: 'bg-transparent border border-violet-500/30',       text: 'text-violet-500',       Icon: Layers   },
-  pyqsDone:         { bg: 'bg-transparent border border-[hsl(var(--gold))]/40', text: 'text-[hsl(var(--gold))]', Icon: BookOpen },
-  revisionSystem:   { bg: 'bg-transparent border border-primary/30',          text: 'text-primary',          Icon: Clock    },
-  revisionSubject:  { bg: 'bg-transparent border border-primary/30',          text: 'text-primary',          Icon: Clock    },
+  contentCompleted: { bg: 'bg-sky-500/10 border-sky-500/20',          text: 'text-sky-500',          Icon: BookOpen },
+  qbankDone:        { bg: 'bg-violet-500/10 border-violet-500/20',   text: 'text-violet-500',       Icon: Layers   },
+  pyqsDone:         { bg: 'bg-amber-500/10 border-amber-500/20',     text: 'text-amber-500',        Icon: BookOpen },
+  revisionSystem:   { bg: 'bg-primary/10 border-primary/20',          text: 'text-primary',          Icon: Clock    },
+  revisionSubject:  { bg: 'bg-primary/10 border-primary/20',          text: 'text-primary',          Icon: Clock    },
 };
 
 // ── Event card ────────────────────────────────────────────────────────────────
@@ -76,24 +75,40 @@ function EventCard({ event }: { event: TimelineEvent }) {
   const style = EVENT_STYLE[event.eventType];
   const { Icon } = style;
   const days = event.meta?.daysOverdue as number | undefined;
+  const isDueToday = event.meta?.isDueToday as boolean | undefined;
   return (
-    <div className="bg-card border border-border rounded-xl p-3 flex items-center gap-3 shadow-sm hover:border-primary/20 transition-colors">
-      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', style.bg)}>
+    <div className="bg-card border border-border/80 rounded-2xl p-3.5 flex items-center gap-3.5 shadow-sm hover:border-primary/40 transition-all duration-200">
+      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border', style.bg)}>
         <Icon className={cn('w-4 h-4', style.text)} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground truncate">{event.entityName}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {event.subjectName && <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">{event.subjectName}</p>}
-          {event.status === 'overdue' && days !== undefined && (
-            <p className="text-[11px] font-medium uppercase tracking-wider text-destructive shrink-0">{days} day{days !== 1 ? 's' : ''} overdue</p>
+        <div className="flex items-center gap-2 mt-1">
+          {event.subjectName && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md border border-border/40 truncate">
+              {event.subjectName}
+            </span>
           )}
-          {event.status === 'upcoming' && (
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground shrink-0">{format(event.date, 'MMM d')}</p>
+          {event.status === 'overdue' && days !== undefined && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-destructive bg-destructive/10 px-2 py-0.5 rounded-md border border-destructive/20 shrink-0">
+              {days} day{days !== 1 ? 's' : ''} overdue
+            </span>
+          )}
+          {event.status === 'upcoming' && isDueToday && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 shrink-0">
+              Due Today
+            </span>
+          )}
+          {event.status === 'upcoming' && !isDueToday && (
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground shrink-0">
+              {format(event.date, 'MMM d')}
+            </span>
           )}
         </div>
       </div>
       {event.status === 'overdue' && <AlertCircle className="w-4 h-4 text-destructive shrink-0" />}
+      {event.status === 'upcoming' && isDueToday && <Clock className="w-4 h-4 text-amber-500 shrink-0" />}
+      {event.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
     </div>
   );
 }
@@ -105,15 +120,19 @@ function Section({ title, icon: Icon, iconClass, events, emptyText }: {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Icon className={cn('w-4 h-4 shrink-0', iconClass)} />
+        <div className={cn("p-1.5 rounded-lg bg-muted/80 border border-border/50", iconClass)}>
+          <Icon className="w-4 h-4" />
+        </div>
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
         {events.length > 0 && (
-          <span className="ml-auto text-[10px] font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{events.length}</span>
+          <Badge variant="secondary" className="ml-auto font-mono text-[10px] px-2 py-0.5 font-bold">
+            {events.length}
+          </Badge>
         )}
       </div>
       {events.length === 0
-        ? <p className="text-sm text-muted-foreground/50 pl-6 italic">{emptyText}</p>
-        : <div className="space-y-2 pl-6">{events.map(e => <EventCard key={e.id} event={e} />)}</div>}
+        ? <p className="text-sm text-muted-foreground/60 pl-8 italic">{emptyText}</p>
+        : <div className="space-y-2.5 pl-2">{events.map(e => <EventCard key={e.id} event={e} />)}</div>}
     </div>
   );
 }
@@ -123,16 +142,16 @@ function PastDayGroup({ date, events }: { date: Date; events: TimelineEvent[] })
   return (
     <div>
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center shrink-0 bg-muted/30 border border-border">
+        <div className="w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-center shrink-0 bg-card border border-border shadow-sm">
           <span className="text-[9px] font-semibold uppercase tracking-wider leading-none text-muted-foreground">{format(date, 'EEE')}</span>
           <span className="text-sm font-mono font-bold leading-none mt-1 text-foreground">{format(date, 'd')}</span>
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground">{format(date, 'MMMM d')}</p>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{events.length} task{events.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm font-semibold text-foreground">{format(date, 'MMMM d, yyyy')}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{events.length} task{events.length !== 1 ? 's' : ''} completed</p>
         </div>
       </div>
-      <div className="space-y-2 pl-14">{events.map(e => <EventCard key={e.id} event={e} />)}</div>
+      <div className="space-y-2.5 pl-12">{events.map(e => <EventCard key={e.id} event={e} />)}</div>
     </div>
   );
 }
@@ -142,8 +161,9 @@ export default function Timeline() {
   const history  = useHistory();
   const systems  = useAllSystems();
   const subjects = useSubjects();
-  const [filter, setFilter]   = useState<TimelineFilter>('all');
-  const [calDate, setCalDate] = useState(new Date());
+  const [filter, setFilter]       = useState<TimelineFilter>('all');
+  const [calDate, setCalDate]     = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const now        = new Date();
   const monthStart = startOfMonth(calDate);
@@ -174,21 +194,35 @@ export default function Timeline() {
       return systemToRevisionEvent(sys, sub?.name ?? '', 'upcoming');
     });
 
-  // ── Overdue revision events — all still-outstanding overdue items ─────────
-  const overdueRevisions: TimelineEvent[] = systems
-    .filter(sys => isRevisionOverdue(sys))
+  // ── Overdue revision events — sorted strictly by Decay Score / Priority ──
+  const overdueRevisions: TimelineEvent[] = sortSystemsByRevisionPriority(systems.filter(sys => isRevisionOverdue(sys)))
     .map(sys => {
       const sub = subjects.find(s => s.id === sys.subjectId);
       return systemToRevisionEvent(sys, sub?.name ?? '', 'overdue');
-    })
-    .sort((a, b) => {
-      const da = (a.meta?.daysOverdue as number) ?? 0;
-      const db_ = (b.meta?.daysOverdue as number) ?? 0;
-      return db_ - da; // most overdue first
+    });
+
+  // ── Due Today revision events ─────────────────────────────────────────────
+  const dueTodayRevisions: TimelineEvent[] = sortSystemsByRevisionPriority(systems.filter(sys => isRevisionDueToday(sys)))
+    .map(sys => {
+      const sub = subjects.find(s => s.id === sys.subjectId);
+      return {
+        id: `rev-${sys.id}-due-today`,
+        eventType: 'revisionSystem' as const,
+        entityName: `${sys.name} Revision`,
+        subjectName: sub?.name ?? '',
+        date: new Date(sys.nextRevisionDate!),
+        status: 'upcoming' as const,
+        meta: { isDueToday: true },
+      };
     });
 
   // ── Apply filter ──────────────────────────────────────────────────────────
-  const filtered = (events: TimelineEvent[]) => events.filter(e => eventMatchesFilter(e, filter));
+  const filtered = (events: TimelineEvent[]) => events.filter(e => {
+    const matchesCategory = eventMatchesFilter(e, filter);
+    if (!matchesCategory) return false;
+    if (selectedDate) return isSameDay(e.date, selectedDate);
+    return true;
+  });
 
   // ── Calendar structure ───────────────────────────────────────────────────
   const days     = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -196,12 +230,14 @@ export default function Timeline() {
   const blanks   = Array.from({ length: startDow });
 
   // ── Section data ──────────────────────────────────────────────────────────
-  const todayCompleted       = isCurrentMonth ? filtered(monthCompleted).filter(e => isToday(e.date)) : [];
+  const todayDue             = (isCurrentMonth && (!selectedDate || isSameDay(now, selectedDate))) ? filtered(dueTodayRevisions) : [];
+  const todayCompleted       = (isCurrentMonth && (!selectedDate || isSameDay(now, selectedDate))) ? filtered(monthCompleted).filter(e => isToday(e.date)) : [];
+  const todayEvents          = [...todayDue, ...todayCompleted];
   const filteredUpcoming     = filtered(upcomingRevisions);
   const filteredOverdue      = isCurrentMonth ? filtered(overdueRevisions) : [];
 
-  // Past days in the selected month (not today), most recent first
-  const pastEntries = filtered(monthCompleted).filter(e => isCurrentMonth ? !isToday(e.date) : true);
+  // Past days in the selected month, most recent first
+  const pastEntries = filtered(monthCompleted).filter(e => isCurrentMonth ? (!selectedDate ? !isToday(e.date) : true) : true);
   const pastGrouped: { date: Date; events: TimelineEvent[] }[] = [];
   pastEntries.forEach(event => {
     const existing = pastGrouped.find(g => isSameDay(g.date, event.date));
@@ -211,7 +247,7 @@ export default function Timeline() {
   pastGrouped.sort((a, b) => b.date.getTime() - a.date.getTime());
 
   const everythingEmpty =
-    todayCompleted.length === 0 && filteredUpcoming.length === 0 &&
+    todayEvents.length === 0 && filteredUpcoming.length === 0 &&
     filteredOverdue.length === 0 && pastGrouped.length === 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -219,39 +255,126 @@ export default function Timeline() {
     <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
 
       <div className="relative z-10 flex-1 flex flex-col">
-        <header className="mb-10 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-foreground tracking-tight">Timeline</h1>
-            <p className="text-sm font-medium text-muted-foreground mt-1 tracking-wide uppercase">Your chronological view</p>
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <header className="mb-8">
+          <div className="flex items-center gap-1.5 text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">
+            <Sparkles className="w-3 h-3" /> Active Recall Timeline
           </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Timeline</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Track daily completed tasks, study activity logs, and upcoming spaced revisions over time.
+          </p>
         </header>
 
+        {/* ── KPI Overview Grid ────────────────────────────────────────────── */}
+        <section className="mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Total Completed */}
+            <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Completed</span>
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                  {history.length}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Total tasks logged</div>
+              </div>
+            </div>
+
+            {/* Monthly Activity */}
+            <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/30 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{format(calDate, 'MMM')} Activity</span>
+                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                  <Activity className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                  {monthCompleted.length}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">In selected month</div>
+              </div>
+            </div>
+
+            {/* Due / Overdue */}
+            <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Attention</span>
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                  {overdueRevisions.length + dueTodayRevisions.length}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Due or overdue</div>
+              </div>
+            </div>
+
+            {/* Scheduled Revisions */}
+            <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/30 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Upcoming</span>
+                <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
+                  {upcomingRevisions.length}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Revisions this month</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Filter chips ──────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-2 mb-8">
+        <div className="flex flex-wrap items-center gap-2 mb-8">
+          <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1 mr-1">
+            <Filter className="w-3 h-3" /> Filter:
+          </span>
           {TIMELINE_FILTERS.map(({ key, label }) => (
             <button key={key} onClick={() => setFilter(prev => prev === key ? 'all' : key)}
-              className={cn('px-4 py-2 rounded-lg text-[11px] font-medium tracking-wide uppercase transition-all border',
-                filter === key ? 'bg-primary/10 text-primary border-primary/20' : 'bg-card text-muted-foreground border-border hover:bg-muted/50')}>
+              className={cn(
+                'px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border shadow-sm',
+                filter === key
+                  ? 'bg-primary/10 text-primary border-primary/30 ring-1 ring-primary/20'
+                  : 'bg-card text-muted-foreground border-border/80 hover:bg-muted/50 hover:text-foreground'
+              )}>
               {label}
             </button>
           ))}
         </div>
 
         {/* ── Month-on-Month Heatmap Calendar ──────────────────────────────── */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm mb-10 overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <button onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors border border-transparent hover:border-border">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
-              {format(calDate, 'MMMM yyyy')}
-            </h2>
-            <button onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-              disabled={calDate >= startOfMonth(now)}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors border border-transparent hover:border-border disabled:opacity-30 disabled:pointer-events-none">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-sm mb-8 overflow-hidden">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                <CalendarDays className="w-4 h-4" />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                {format(calDate, 'MMMM yyyy')} Activity Heatmap
+              </h2>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors border border-border/50 bg-background shadow-sm">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                disabled={calDate >= startOfMonth(now)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors border border-border/50 bg-background shadow-sm disabled:opacity-30 disabled:pointer-events-none">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 gap-1.5 mb-2">
@@ -265,14 +388,15 @@ export default function Timeline() {
           <div className="grid grid-cols-7 gap-1.5">
             {blanks.map((_, i) => <div key={`b-${i}`} />)}
             {days.map(day => {
-              const key      = format(day, 'yyyy-MM-dd');
-              const isTdy    = isSameDay(day, now);
-              const count    = activityByDay.get(key) || 0;
-              const isFuture = day > now && !isSameDay(day, now);
+              const key        = format(day, 'yyyy-MM-dd');
+              const isTdy      = isSameDay(day, now);
+              const isSelected = selectedDate && isSameDay(day, selectedDate);
+              const count      = activityByDay.get(key) || 0;
+              const isFuture   = day > now && !isSameDay(day, now);
 
-              let bgClass = 'bg-transparent text-foreground hover:bg-muted/30'; 
-              if (count === 1) bgClass = 'bg-primary/20 text-primary-foreground hover:bg-primary/30';
-              if (count === 2) bgClass = 'bg-primary/40 text-primary-foreground hover:bg-primary/50';
+              let bgClass = 'bg-transparent text-foreground hover:bg-muted/40'; 
+              if (count === 1) bgClass = 'bg-primary/20 text-foreground hover:bg-primary/30';
+              if (count === 2) bgClass = 'bg-primary/40 text-foreground hover:bg-primary/50';
               if (count === 3) bgClass = 'bg-primary/70 text-primary-foreground font-medium hover:bg-primary/80';
               if (count >= 4)  bgClass = 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90';
 
@@ -282,26 +406,52 @@ export default function Timeline() {
                  bgClass += ' ring-2 ring-primary ring-offset-2 ring-offset-card';
               }
               
+              if (isSelected) {
+                 bgClass += ' ring-2 ring-ring ring-offset-2 ring-offset-background font-bold scale-105 z-10';
+              }
+
               if (isFuture) {
                  bgClass = 'bg-transparent text-muted-foreground/30 pointer-events-none';
               }
 
               return (
-                <div key={key} className={cn(
-                  'aspect-square flex items-center justify-center rounded-lg text-xs transition-all cursor-default',
-                  bgClass
-                )}>
+                <button
+                  key={key}
+                  disabled={isFuture}
+                  onClick={() => setSelectedDate(prev => prev && isSameDay(prev, day) ? null : day)}
+                  className={cn(
+                    'aspect-square flex items-center justify-center rounded-lg text-xs transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                    bgClass
+                  )}
+                  title={`${format(day, 'MMM d, yyyy')}: ${count} task${count !== 1 ? 's' : ''} completed`}
+                >
                   {day.getDate()}
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
 
+        {/* Selected date filter banner */}
+        {selectedDate && (
+          <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-xl p-3 mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+              <CalendarDays className="w-4 h-4 shrink-0" />
+              <span>Filtering activity for <span className="underline">{format(selectedDate, 'MMMM d, yyyy')}</span></span>
+            </div>
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors px-2 py-1 rounded-lg hover:bg-primary/10 flex items-center gap-1"
+            >
+              Clear Filter
+            </button>
+          </div>
+        )}
+
         {/* ── Sections ──────────────────────────────────────────────────────── */}
         <div className="space-y-10">
           {isCurrentMonth && (
-            <Section title="Today" icon={CalendarDays} iconClass="text-primary" events={todayCompleted} emptyText="Nothing completed today yet." />
+            <Section title="Today" icon={CalendarDays} iconClass="text-primary" events={todayEvents} emptyText="No revisions due or activity completed today." />
           )}
           
           {(isCurrentMonth || filteredUpcoming.length > 0) && (

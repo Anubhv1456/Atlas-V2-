@@ -1,6 +1,6 @@
 {
   "name": "Remix: Atlas-V1",
-  "description": "Imported from GitHub: Anubhv1456/Atlas-V1",
+  "description": "Medical Study & Active Recall Tracker with Revision Score Logging and Analytics",
   "requestFramePermissions": [
     "web-share"
   ],

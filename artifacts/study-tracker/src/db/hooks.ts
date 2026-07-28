@@ -1,7 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Subject, StudySystem, HistoryEntry, PYQYear } from './database';
 import { SystemStatus } from './database';
-import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today } from './revisionEngine';
+import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today, sortSystemsByRevisionPriority } from './revisionEngine';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 export function useSubjects() {
   const subjects = useLiveQuery(() => db.subjects.toArray()) ?? [];
@@ -236,6 +238,11 @@ export async function recordInitialEvaluation(
     nextRevisionDate,
     focus: null,
   });
+
+  const formattedDate = format(nextRevisionDate, 'MMM d, yyyy');
+  toast.success('Recall Engine Initialized', {
+    description: `Confidence: ${confidence} • First review scheduled in ${currentRevisionInterval} days (${formattedDate})`,
+  });
 }
 
 /**
@@ -254,8 +261,8 @@ export async function completeRevision(
   if (!sys) return;
 
   const now = today();
-  const currentInterval = sys.currentRevisionInterval ?? 14;
-  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(confidence, currentInterval, now);
+  const previousInterval = sys.currentRevisionInterval ?? 14;
+  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(confidence, previousInterval, now);
 
   await updateSystem(systemId, {
     status: confidence,
@@ -273,6 +280,14 @@ export async function completeRevision(
     taskKey: 'revision',
     taskLabel: 'Revision',
     completedAt: new Date(),
+  });
+
+  const delta = currentRevisionInterval - previousInterval;
+  const deltaStr = delta >= 0 ? `+${delta}d extension` : `${delta}d adjusted`;
+  const formattedDate = format(nextRevisionDate, 'MMM d, yyyy');
+
+  toast.success(`Revision Logged: ${systemName}`, {
+    description: `Interval: ${previousInterval}d → ${currentRevisionInterval}d (${deltaStr}) • Next recall on ${formattedDate}`,
   });
 }
 

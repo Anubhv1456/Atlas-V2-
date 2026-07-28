@@ -57,6 +57,20 @@ export interface PYQYear {
   createdAt: Date;
 }
 
+export interface ScoreLog {
+  id?: number;
+  type: 'revision' | 'pyq';
+  subjectId: number;
+  systemId?: number;
+  pyqYearId?: number;
+  title: string;
+  score: number;
+  total: number;
+  percentage: number;
+  timestamp: Date;
+  notes?: string;
+}
+
 export interface HistoryEntry {
   id?: number;
   subjectId: number;
@@ -74,6 +88,7 @@ export class AtlasDB extends Dexie {
   systems!: Table<StudySystem, number>;
   history!: Table<HistoryEntry, number>;
   pyqYears!: Table<PYQYear, number>;
+  scoreLogs!: Table<ScoreLog, number>;
 
   constructor() {
     super('AtlasDB');
@@ -177,6 +192,14 @@ export class AtlasDB extends Dexie {
           }
         });
     });
+    // v9: add scoreLogs table
+    this.version(9).stores({
+      subjects: '++id, name, order',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus',
+      history: '++id, subjectId, systemId, completedAt',
+      pyqYears: '++id, subjectId',
+      scoreLogs: '++id, type, subjectId, systemId, pyqYearId, timestamp',
+    });
   }
 }
 
@@ -185,11 +208,12 @@ export const db = new AtlasDB();
 // ── Export / Import ────────────────────────────────────────────────────────
 
 export async function exportData() {
-  const subjects = await db.subjects.toArray();
-  const systems  = await db.systems.toArray();
-  const history  = await db.history.toArray();
-  const pyqYears = await db.pyqYears.toArray();
-  return { subjects, systems, history, pyqYears };
+  const subjects  = await db.subjects.toArray();
+  const systems   = await db.systems.toArray();
+  const history   = await db.history.toArray();
+  const pyqYears  = await db.pyqYears.toArray();
+  const scoreLogs = await db.scoreLogs.toArray();
+  return { subjects, systems, history, pyqYears, scoreLogs };
 }
 
 export async function importData(data: {
@@ -197,12 +221,14 @@ export async function importData(data: {
   systems: StudySystem[];
   history?: HistoryEntry[];
   pyqYears?: PYQYear[];
+  scoreLogs?: ScoreLog[];
 }) {
-  await db.transaction('rw', db.subjects, db.systems, db.history, db.pyqYears, async () => {
+  await db.transaction('rw', db.subjects, db.systems, db.history, db.pyqYears, db.scoreLogs, async () => {
     await db.subjects.clear();
     await db.systems.clear();
     await db.history.clear();
     await db.pyqYears.clear();
+    await db.scoreLogs.clear();
 
     if (data.subjects?.length) {
       await db.subjects.bulkAdd(
@@ -252,6 +278,15 @@ export async function importData(data: {
           ...p,
           createdAt:   new Date(p.createdAt),
           completedAt: p.completedAt ? new Date(p.completedAt) : null,
+        })),
+      );
+    }
+
+    if (data.scoreLogs?.length) {
+      await db.scoreLogs.bulkAdd(
+        data.scoreLogs.map(sl => ({
+          ...sl,
+          timestamp: new Date(sl.timestamp),
         })),
       );
     }

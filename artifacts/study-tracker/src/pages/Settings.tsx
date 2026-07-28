@@ -1,14 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  isAutoBackupEnabled,
+  setAutoBackupEnabled,
+  getAutoSnapshots,
+  createAutoSnapshot,
+  restoreAutoSnapshot,
+  deleteAutoSnapshot,
+  AutoSnapshot,
+} from '@/lib/autoBackup';
 
 
 // ── Last-backup timestamp helpers ──────────────────────────────────────────
@@ -49,6 +59,11 @@ export default function Settings() {
   const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
+
+  // Auto-backup state
+  const [autoBackupEnabled, setAutoBackupEnabledState] = useState<boolean>(true);
+  const [autoSnapshots, setAutoSnapshots] = useState<AutoSnapshot[]>([]);
+  const [snapshotToRestore, setSnapshotToRestore] = useState<AutoSnapshot | null>(null);
 
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -105,7 +120,56 @@ export default function Settings() {
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'));
     setLastBackup(localStorage.getItem(LS_KEY));
+    setAutoBackupEnabledState(isAutoBackupEnabled());
+    setAutoSnapshots(getAutoSnapshots());
   }, []);
+
+  const handleToggleAutoBackup = (enabled: boolean) => {
+    setAutoBackupEnabled(enabled);
+    setAutoBackupEnabledState(enabled);
+    toast({
+      title: enabled ? 'Auto-Backup Enabled' : 'Auto-Backup Disabled',
+      description: enabled
+        ? 'Rolling daily snapshots will be automatically created in local storage.'
+        : 'Automatic background snapshots turned off.',
+    });
+  };
+
+  const handleManualSnapshot = async () => {
+    const snap = await createAutoSnapshot();
+    if (snap) {
+      setAutoSnapshots(getAutoSnapshots());
+      setLastBackup(snap.timestamp);
+      toast({
+        title: 'Auto Snapshot Created! 🛡️',
+        description: `Saved ${snap.subjectsCount} subjects, ${snap.systemsCount} systems, and ${snap.scoreLogsCount} score logs.`,
+      });
+    } else {
+      toast({
+        title: 'Snapshot Empty',
+        description: 'No study data found to back up yet.',
+      });
+    }
+  };
+
+  const handleConfirmRestoreSnapshot = async () => {
+    if (!snapshotToRestore) return;
+    const ok = await restoreAutoSnapshot(snapshotToRestore.id);
+    if (ok) {
+      toast({
+        title: 'Data Restored Successfully!',
+        description: 'Your local database was restored from the selected snapshot.',
+      });
+      setSnapshotToRestore(null);
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      toast({
+        title: 'Restore Failed',
+        description: 'Could not restore data from this snapshot.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // ── Theme ────────────────────────────────────────────────────────────────
   const toggleTheme = () => {
@@ -348,6 +412,99 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* Automated Local Backup & Snapshots */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1 mt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Automated Auto-Snapshots</h2>
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-mono">
+              <ShieldCheck className="w-3 h-3 mr-1" /> Active Safeguard
+            </Badge>
+          </div>
+
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
+            {/* Toggle Row */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-500">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">Daily Rolling Auto-Snapshots</div>
+                  <div className="text-xs text-muted-foreground">Automatically saves local database snapshots every 12 hours</div>
+                </div>
+              </div>
+              <Switch
+                checked={autoBackupEnabled}
+                onCheckedChange={handleToggleAutoBackup}
+              />
+            </div>
+
+            {/* Take Manual Snapshot */}
+            <button
+              onClick={handleManualSnapshot}
+              className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-foreground">Create Snapshot Now</div>
+                <div className="text-xs text-muted-foreground">Force-save an immediate local backup snapshot</div>
+              </div>
+              <Badge variant="secondary" className="text-xs">Take Snapshot</Badge>
+            </button>
+
+            {/* List of Rolling Snapshots */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground">Recent Rolling Local Snapshots ({autoSnapshots.length}/5)</span>
+              </div>
+
+              {autoSnapshots.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No automatic snapshots stored yet. Snapshots will be generated automatically as you study.</p>
+              ) : (
+                <div className="space-y-2">
+                  {autoSnapshots.map((snap) => (
+                    <div key={snap.id} className="flex items-center justify-between bg-muted/40 p-3 rounded-xl border border-border/50 text-xs">
+                      <div>
+                        <div className="font-semibold font-mono text-foreground">
+                          {formatLastBackup(snap.timestamp)}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {snap.subjectsCount} subjects • {snap.systemsCount} systems • {snap.scoreLogsCount} score logs
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSnapshotToRestore(snap)}
+                          className="h-8 text-[11px] font-semibold gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3 text-primary" />
+                          Restore
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            deleteAutoSnapshot(snap.id);
+                            setAutoSnapshots(getAutoSnapshots());
+                          }}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Backup */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Backup</h2>
@@ -493,6 +650,48 @@ export default function Settings() {
             </Button>
             <Button variant="destructive" className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleDeleteAll}>
               Delete Everything
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Restore Auto-Snapshot confirmation dialog ───────────────────── */}
+      <Dialog open={!!snapshotToRestore} onOpenChange={(open) => { if (!open) setSnapshotToRestore(null); }}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Restore Auto-Snapshot?</DialogTitle>
+            <DialogDescription className="pt-1">
+              Restoring this snapshot will replace your current study data with the data from{' '}
+              <span className="font-semibold text-foreground">
+                {snapshotToRestore ? formatLastBackup(snapshotToRestore.timestamp) : ''}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          {snapshotToRestore && (
+            <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm mt-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subjects</span>
+                <span className="font-medium text-foreground">{snapshotToRestore.subjectsCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Systems</span>
+                <span className="font-medium text-foreground">{snapshotToRestore.systemsCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Score Logs</span>
+                <span className="font-medium text-foreground">{snapshotToRestore.scoreLogsCount}</span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-row gap-2 mt-4 sm:justify-center">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setSnapshotToRestore(null)}>
+              Cancel
+            </Button>
+            <Button className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleConfirmRestoreSnapshot}>
+              Restore Data
             </Button>
           </DialogFooter>
         </DialogContent>

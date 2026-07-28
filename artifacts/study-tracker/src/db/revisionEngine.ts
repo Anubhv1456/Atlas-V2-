@@ -96,7 +96,7 @@ export function scheduleNextRevision(
 
 /** True when a system has an initial completion and a scheduled revision. */
 export function hasRevisionScheduled(sys: StudySystem): boolean {
-  return Boolean(sys.completionDate && sys.nextRevisionDate);
+  return Boolean(sys.completionDate && sys.nextRevisionDate && sys.contentCompleted && sys.qbankDone);
 }
 
 /** True when the next revision date is today or in the past. */
@@ -132,6 +132,31 @@ export function daysOverdue(sys: StudySystem, now: Date = today()): number {
   const n = new Date(now);
   n.setHours(0, 0, 0, 0);
   return Math.floor((n.getTime() - due.getTime()) / 86_400_000);
+}
+
+/** Calculate Knowledge Decay / Debt score for prioritizing revision queue. */
+export function calculateDecayScore(sys: StudySystem, now: Date = today()): number {
+  const overdue = daysOverdue(sys, now);
+  // Weight: Weak = 3, Average = 2, Strong = 1
+  const confidenceWeight = sys.status === 'Weak' ? 3 : sys.status === 'Average' ? 2 : 1;
+  if (overdue > 0) {
+    return (overdue + 1) * confidenceWeight;
+  } else if (isRevisionDue(sys, now)) {
+    return 0.5 * confidenceWeight;
+  }
+  return 0;
+}
+
+/** Sort systems strictly by revision debt priority (highest decay score first, then earliest next revision date). */
+export function sortSystemsByRevisionPriority(systems: StudySystem[], now: Date = today()): StudySystem[] {
+  return [...systems].sort((a, b) => {
+    const scoreA = calculateDecayScore(a, now);
+    const scoreB = calculateDecayScore(b, now);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    const dateA = a.nextRevisionDate ? new Date(a.nextRevisionDate).getTime() : Infinity;
+    const dateB = b.nextRevisionDate ? new Date(b.nextRevisionDate).getTime() : Infinity;
+    return dateA - dateB;
+  });
 }
 
 /** True when the revision is scheduled for a future date (not yet due). */

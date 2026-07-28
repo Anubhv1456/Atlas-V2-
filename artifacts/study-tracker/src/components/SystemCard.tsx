@@ -3,7 +3,8 @@ import { StudySystem, SystemStatus } from '@/db/database';
 import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, completeRevision } from '@/db/hooks';
 import { ProgressBar } from './ProgressBar';
 import { ConfidenceDialog } from './ConfidenceDialog';
-import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2 } from 'lucide-react';
+import { ScoreLogModal } from './ScoreLogModal';
+import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -52,6 +53,7 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   // Initial evaluation (shown once both tasks complete)
   const [showEvalDialog, setShowEvalDialog]   = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showScoreModal, setShowScoreModal]       = useState(false);
   // Guard to prevent re-triggering if already open
   const evalShownRef = useRef(false);
 
@@ -173,6 +175,7 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#10b981', '#059669', '#047857'] });
     await completeRevision(system.id!, system.status, system.subjectId, subjectName, system.name);
+    setShowScoreModal(true);
   };
 
   const statusColors: Record<SystemStatus, string> = {
@@ -318,6 +321,18 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                         </Button>
                       </div>
                     )}
+
+                    <div className="pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full rounded-xl font-semibold text-xs border-border hover:bg-muted"
+                        onClick={() => setShowScoreModal(true)}
+                      >
+                        <Award className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                        Log Test / Revision Score
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -409,6 +424,16 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Score log modal ────────────────────────────────────────────────── */}
+      <ScoreLogModal
+        isOpen={showScoreModal}
+        onClose={() => setShowScoreModal(false)}
+        initialType="revision"
+        initialSubjectId={system.subjectId}
+        initialSystemId={system.id}
+        initialTitle={`${system.name} Revision Score`}
+      />
     </>
   );
 }

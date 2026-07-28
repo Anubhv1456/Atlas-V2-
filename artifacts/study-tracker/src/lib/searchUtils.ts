@@ -1,5 +1,5 @@
 import { StudySystem, Subject } from '@/db/database';
-import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
+import { isRevisionDue, isRevisionOverdue, hasRevisionScheduled } from '@/db/revisionEngine';
 
 export type Keyword = 'strong' | 'average' | 'weak' | 'revision' | 'due' | 'overdue' | 'completed';
 
@@ -25,7 +25,7 @@ export function systemMatchesKeywords(sys: StudySystem, keywords: Keyword[]): bo
       case 'strong':    return sys.status === 'Strong';
       case 'average':   return sys.status === 'Average';
       case 'weak':      return sys.status === 'Weak';
-      case 'revision':  return Boolean(sys.completionDate);
+      case 'revision':  return hasRevisionScheduled(sys);
       case 'due':       return isRevisionDue(sys);
       case 'overdue':   return isRevisionOverdue(sys);
       case 'completed': return sys.contentCompleted && sys.qbankDone;
