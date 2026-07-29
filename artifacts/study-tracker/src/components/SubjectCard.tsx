@@ -1,17 +1,20 @@
 import { Link } from 'wouter';
 import { Subject, StudySystem } from '@/db/database';
 import { ProgressBar } from './ProgressBar';
-import { ChevronRight, GripVertical, BookOpen, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, GripVertical, BookOpen, CheckCircle2, MoreVertical, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface SubjectCardProps {
   subject: Subject;
   systems: StudySystem[];
   dragHandleProps?: any;
+  onDelete?: (subject: Subject) => void;
+  onRename?: (subject: Subject) => void;
 }
 
-export function SubjectCard({ subject, systems, dragHandleProps }: SubjectCardProps) {
+export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRename }: SubjectCardProps) {
   const totalTasks = systems.length * 2;
   const completedTasks = systems.reduce((acc, sys) => {
     let done = 0;
@@ -60,6 +63,36 @@ export function SubjectCard({ subject, systems, dragHandleProps }: SubjectCardPr
             >
               {progress}%
             </Badge>
+
+            {(onDelete || onRename) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                  {onRename && (
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onRename(subject); }}
+                      className="gap-2 py-2 cursor-pointer text-xs"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Rename
+                    </DropdownMenuItem>
+                  )}
+                  {onDelete && (
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onDelete(subject); }}
+                      className="text-destructive focus:text-destructive gap-2 py-2 cursor-pointer text-xs font-medium"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
           </div>
         </div>

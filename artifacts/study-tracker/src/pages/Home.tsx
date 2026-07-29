@@ -1,9 +1,12 @@
 import { useRef, useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { useSubjects, useAllSystems, addSubject, useCurrentStreak, setFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
+import { useSubjects, useAllSystems, addSubject, updateSubject, deleteSubject, useCurrentStreak, setFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil, Flame, Award, Sparkles, TrendingUp } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +15,7 @@ import { useLocation } from 'wouter';
 import { runSearch } from '@/lib/searchUtils';
 import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calculateDecayScore, daysOverdue } from '@/db/revisionEngine';
 import { format } from 'date-fns';
-import { StudySystem } from '@/db/database';
+import { StudySystem, Subject } from '@/db/database';
 // ── Inline result sub-components ──────────────────────────────────────────────
 
 function StatusBadge({ sys }: { sys: StudySystem }) {
@@ -57,6 +60,24 @@ export default function Home() {
   const pyqs = useAllPYQs();
   const [, setLocation] = useLocation();
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [subjectToDelete, setSubjectToDelete] = useState<Subject | null>(null);
+  const [subjectToRename, setSubjectToRename] = useState<Subject | null>(null);
+  const [renameSubjectName, setRenameSubjectName] = useState('');
+
+  const handleDeleteSubjectConfirm = async () => {
+    if (subjectToDelete) {
+      await deleteSubject(subjectToDelete.id!);
+      setSubjectToDelete(null);
+    }
+  };
+
+  const handleRenameSubjectSave = async () => {
+    if (subjectToRename && renameSubjectName.trim()) {
+      await updateSubject(subjectToRename.id!, renameSubjectName.trim());
+      setSubjectToRename(null);
+      setRenameSubjectName('');
+    }
+  };
 
   const handleSubjectDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
@@ -785,6 +806,8 @@ export default function Home() {
                                   subject={subject}
                                   systems={systems.filter(s => s.subjectId === subject.id)}
                                   dragHandleProps={provided.dragHandleProps}
+                                  onDelete={(sub) => setSubjectToDelete(sub)}
+                                  onRename={(sub) => { setSubjectToRename(sub); setRenameSubjectName(sub.name); }}
                                 />
                               </div>
                             )}
@@ -826,6 +849,59 @@ export default function Home() {
         subjects={subjects}
         onSelect={handleSetFocus}
       />
+
+      {/* Rename Subject dialog */}
+      <Dialog open={!!subjectToRename} onOpenChange={(open) => { if (!open) setSubjectToRename(null); }}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Rename Subject</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              autoFocus
+              value={renameSubjectName}
+              onChange={e => setRenameSubjectName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRenameSubjectSave(); }}
+              className="text-lg py-6 px-4 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSubjectToRename(null)} className="rounded-xl">Cancel</Button>
+            <Button
+              onClick={handleRenameSubjectSave}
+              disabled={!renameSubjectName.trim() || renameSubjectName === subjectToRename?.name}
+              className="rounded-xl font-semibold px-8 shadow-sm"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Subject confirmation dialog */}
+      <Dialog open={!!subjectToDelete} onOpenChange={(open) => { if (!open) setSubjectToDelete(null); }}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-destructive">Delete Subject</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Are you sure you want to delete <strong className="text-foreground">{subjectToDelete?.name}</strong>?
+            </p>
+            <div className="text-xs text-destructive bg-destructive/10 p-3 rounded-xl border border-destructive/20 leading-relaxed font-medium">
+              ⚠️ This will permanently delete this subject along with all its systems, task progress, revision schedules, and PYQ records.
+            </div>
+          </div>
+          <DialogFooter className="flex-row gap-2 sm:justify-end mt-4">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setSubjectToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleDeleteSubjectConfirm}>
+              Delete Subject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

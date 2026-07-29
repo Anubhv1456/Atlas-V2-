@@ -606,6 +606,31 @@ export default function SubjectDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Subject confirmation dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-destructive">Delete Subject</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Are you sure you want to delete <strong className="text-foreground">{subject.name}</strong>?
+            </p>
+            <div className="text-xs text-destructive bg-destructive/10 p-3 rounded-xl border border-destructive/20 leading-relaxed font-medium">
+              ⚠️ This will permanently delete this subject along with all its systems, task progress, revision schedules, and PYQ records.
+            </div>
+          </div>
+          <DialogFooter className="flex-row gap-2 sm:justify-end mt-4">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleDeleteConfirm}>
+              Delete Subject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
