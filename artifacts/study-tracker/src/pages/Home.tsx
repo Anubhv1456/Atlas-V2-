@@ -16,6 +16,7 @@ import { runSearch } from '@/lib/searchUtils';
 import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calculateDecayScore, daysOverdue } from '@/db/revisionEngine';
 import { format } from 'date-fns';
 import { StudySystem, Subject } from '@/db/database';
+import { calculateOverallProgress, calculateSubjectProgress } from '@/lib/progress';
 // ── Inline result sub-components ──────────────────────────────────────────────
 
 function StatusBadge({ sys }: { sys: StudySystem }) {
@@ -126,7 +127,7 @@ export default function Home() {
     if (sys.qbankDone) done++;
     return acc + done;
   }, 0);
-  const overallProgress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+  const overallProgress = calculateOverallProgress(systems);
   const pendingTasks    = totalTasks - completedTasks;
   const strongSystems   = systems.filter(sys => sys.status === 'Strong').length;
 
@@ -280,10 +281,9 @@ export default function Home() {
     // 3. SUBJECT COVERAGE IMBALANCE (Confidence: 88)
     const subjectStats = subjects.map(sub => {
       const subSys = systems.filter(s => s.subjectId === sub.id);
-      const doneCount = subSys.filter(s => s.contentCompleted && s.qbankDone).length;
       const totalCount = subSys.length;
-      const ratio = totalCount > 0 ? doneCount / totalCount : 0;
-      return { sub, doneCount, totalCount, ratio };
+      const ratio = calculateSubjectProgress(subSys) / 100;
+      return { sub, totalCount, ratio };
     }).filter(s => s.totalCount > 0);
 
     if (subjectStats.length >= 2) {
@@ -315,7 +315,7 @@ export default function Home() {
         const subSys = systems.filter(s => s.subjectId === sub.id);
         const subPYQs = pyqs.filter(p => p.subjectId === sub.id);
         if (subSys.length > 0 && subPYQs.length > 0) {
-          const sysRatio = subSys.filter(s => s.contentCompleted && s.qbankDone).length / subSys.length;
+          const sysRatio = calculateSubjectProgress(subSys) / 100;
           const pyqRatio = subPYQs.filter(p => p.completed).length / subPYQs.length;
           if (sysRatio >= 0.5 && pyqRatio <= 0.3) {
             candidates.push({

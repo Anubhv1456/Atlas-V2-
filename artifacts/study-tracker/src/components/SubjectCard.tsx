@@ -5,6 +5,7 @@ import { ChevronRight, GripVertical, BookOpen, CheckCircle2, MoreVertical, Trash
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { calculateSubjectProgress } from '@/lib/progress';
 
 interface SubjectCardProps {
   subject: Subject;
@@ -23,7 +24,7 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
     return acc + done;
   }, 0);
 
-  const progress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+  const progress = calculateSubjectProgress(systems);
   const isFullyComplete = progress === 100 && totalTasks > 0;
 
   return (

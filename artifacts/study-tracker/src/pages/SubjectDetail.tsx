@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StudySystem } from '@/db/database';
 import { cn } from '@/lib/utils';
+import { calculateSubjectProgress } from '@/lib/progress';
 
 type StageKey = 'contentCompleted' | 'qbankDone';
 
@@ -312,7 +313,7 @@ export default function SubjectDetail() {
     if (sys.qbankDone) done++;
     return acc + done;
   }, 0);
-  const progress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+  const progress = calculateSubjectProgress(systems);
 
   // PYQ unlock: every system must have content + qbank complete
   const pyqUnlocked = systems.length > 0 && systems.every(s => s.contentCompleted && s.qbankDone);

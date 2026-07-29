@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format, formatDistanceToNow } from 'date-fns';
 import { isRevisionDue, isRevisionOverdue, daysOverdue } from '@/db/revisionEngine';
+import { calculateSystemProgress } from '@/lib/progress';
 import confetti from 'canvas-confetti';
 
 interface SystemCardProps {
@@ -83,12 +84,12 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   }, [system.contentCompleted, system.qbankDone, system.completionDate]);
 
   // Progress
+  const progress       = calculateSystemProgress(system);
   const completedCount = (system.contentCompleted ? 1 : 0) + (system.qbankDone ? 1 : 0);
-  const progress       = (completedCount / 2) * 100;
   const contentPct     =
     system.contentInitialized && system.contentUnitsTotal > 0
       ? (system.contentUnitsCompleted / system.contentUnitsTotal) * 100
-      : 0;
+      : (system.contentCompleted ? 100 : 0);
 
   // Revision state
   const revisionDue      = isRevisionDue(system);
