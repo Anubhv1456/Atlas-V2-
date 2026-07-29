@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { AnkiLogo, AnkiBadge } from '@/components/AnkiLogo';
+import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck } from '@/lib/anki';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -64,6 +67,25 @@ export default function Settings() {
   const [autoBackupEnabled, setAutoBackupEnabledState] = useState<boolean>(true);
   const [autoSnapshots, setAutoSnapshots] = useState<AutoSnapshot[]>([]);
   const [snapshotToRestore, setSnapshotToRestore] = useState<AutoSnapshot | null>(null);
+
+  // Anki settings state
+  const [ankiConfig, setAnkiConfigState] = useState(() => getAnkiConfig());
+
+  const handleUpdateAnkiRoot = (val: string) => {
+    const updated = saveAnkiConfig({ rootDeckName: val });
+    setAnkiConfigState(updated);
+  };
+
+  const handleToggleAnkiReminders = (enabled: boolean) => {
+    const updated = saveAnkiConfig({ promptReminders: enabled });
+    setAnkiConfigState(updated);
+  };
+
+  const handleResetAnkiDecks = () => {
+    const updated = saveAnkiConfig({ confirmedDecks: {} });
+    setAnkiConfigState(updated);
+    toast({ title: 'Anki Decks Reset', description: 'All deck verifications have been cleared.' });
+  };
 
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -501,6 +523,85 @@ export default function Settings() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Anki Integration ─────────────────────────────────────────────── */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Anki Integration</h2>
+          <div className="bg-card rounded-2xl border shadow-sm p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl shrink-0">
+                <AnkiLogo className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground text-sm">Unified Daily Review & Subdecks</h3>
+                  <Badge variant="secondary" className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none">Active</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Combines all subdecks into a single collective Daily Anki Review Pass while mapping Atlas subjects and systems to Anki subdecks.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-border/50">
+              <label className="text-xs font-medium text-foreground flex items-center justify-between">
+                <span>Master Deck Prefix (Optional)</span>
+                <span className="text-[11px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded font-mono">Subject::System</code></span>
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  value={ankiConfig.rootDeckName}
+                  onChange={(e) => handleUpdateAnkiRoot(e.target.value)}
+                  placeholder="Optional prefix, e.g. 'NEET PG' or 'AnKing' (or leave blank)"
+                  className="rounded-xl bg-muted/40 text-sm h-10"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono">
+                Active Deck Hierarchy: {ankiConfig.rootDeckName ? `${ankiConfig.rootDeckName}::Subject::System` : 'Subject::System'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-border/50">
+              <div>
+                <div className="font-medium text-xs text-foreground">Post-Task Flashcard Prompt</div>
+                <div className="text-[11px] text-muted-foreground">Show 1-click Anki reminder after QBank / Revision</div>
+              </div>
+              <Switch
+                checked={ankiConfig.promptReminders}
+                onCheckedChange={handleToggleAnkiReminders}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-border/50">
+              <div>
+                <div className="font-medium text-xs text-foreground">Verified Decks</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {Object.keys(ankiConfig.confirmedDecks || {}).length} system deck(s) setup
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => launchAnkiDeck(ankiConfig.rootDeckName)}
+                  className="rounded-xl text-xs h-8 font-semibold"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open Anki
+                </Button>
+                {Object.keys(ankiConfig.confirmedDecks || {}).length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleResetAnkiDecks}
+                    className="rounded-xl text-xs h-8 text-destructive hover:bg-destructive/10"
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </section>

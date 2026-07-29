@@ -17,6 +17,7 @@ import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calcul
 import { format } from 'date-fns';
 import { StudySystem, Subject } from '@/db/database';
 import { calculateOverallProgress, calculateSubjectProgress } from '@/lib/progress';
+import { DailyAnkiCard } from '@/components/DailyAnkiCard';
 // ── Inline result sub-components ──────────────────────────────────────────────
 
 function StatusBadge({ sys }: { sys: StudySystem }) {
@@ -588,6 +589,7 @@ export default function Home() {
                 </div>
               </div>
             </section>
+
             {/* ── Focus for Today ───────────────────────── */}
             <section className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
@@ -720,6 +722,11 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </section>
+
+            {/* ── Daily Anki Review Pass ────────────────────────────────────────── */}
+            <section className="mb-8">
+              <DailyAnkiCard subjects={subjects} systems={systems} />
             </section>
 
             {/* ── Knowledge Insights ──────────────────────────────────────────────── */}

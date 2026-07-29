@@ -4,6 +4,10 @@ import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, com
 import { ProgressBar } from './ProgressBar';
 import { ConfidenceDialog } from './ConfidenceDialog';
 import { ScoreLogModal } from './ScoreLogModal';
+import { AnkiBadge, AnkiLogo } from './AnkiLogo';
+import { AnkiSetupModal } from './AnkiSetupModal';
+import { AnkiPromptModal } from './AnkiPromptModal';
+import { isDeckConfirmed, formatDeckName, launchAnkiDeck } from '@/lib/anki';
 import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
@@ -55,6 +59,30 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   const [showEvalDialog, setShowEvalDialog]   = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showScoreModal, setShowScoreModal]       = useState(false);
+
+  // Anki state
+  const [showAnkiSetup, setShowAnkiSetup]   = useState(false);
+  const [showAnkiPrompt, setShowAnkiPrompt] = useState(false);
+  const [ankiActionType, setAnkiActionType] = useState<'qbank' | 'revision' | 'units'>('revision');
+  const [ankiConfirmed, setAnkiConfirmed]   = useState(() => isDeckConfirmed(subjectName, system.name));
+
+  // Listen for Anki config updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      setAnkiConfirmed(isDeckConfirmed(subjectName, system.name));
+    };
+    window.addEventListener('anki-config-updated', handleUpdate);
+    return () => window.removeEventListener('anki-config-updated', handleUpdate);
+  }, [subjectName, system.name]);
+
+  const handleAnkiBadgeClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent collapsing card if clicked on header
+    if (isDeckConfirmed(subjectName, system.name)) {
+      launchAnkiDeck(formatDeckName(subjectName, system.name));
+    } else {
+      setShowAnkiSetup(true);
+    }
+  };
   // Guard to prevent re-triggering if already open
   const evalShownRef = useRef(false);
 
@@ -185,6 +213,8 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#2563eb', '#1d4ed8'] });
       logCompletion({ subjectId: system.subjectId, subjectName, systemId: system.id!, systemName: system.name, taskKey: 'qbankDone', taskLabel: 'Qbank', completedAt: new Date() });
+      setAnkiActionType('qbank');
+      setTimeout(() => setShowAnkiPrompt(true), 600);
     }
   };
 
@@ -193,6 +223,8 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     setShowEvalDialog(false);
     evalShownRef.current = false;
     await recordInitialEvaluation(system.id!, confidence);
+    setAnkiActionType('units');
+    setTimeout(() => setShowAnkiPrompt(true), 600);
   };
 
   const handleStatusChange = (status: SystemStatus) => updateSystem(system.id!, { status });
@@ -208,6 +240,8 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#10b981', '#059669', '#047857'] });
     await completeRevision(system.id!, system.status, system.subjectId, subjectName, system.name);
     setShowScoreModal(true);
+    setAnkiActionType('revision');
+    setTimeout(() => setShowAnkiPrompt(true), 800);
   };
 
   const statusColors: Record<SystemStatus, string> = {
@@ -270,10 +304,20 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
               <span className="text-[10px] font-mono text-muted-foreground min-w-[3ch]">{completedCount}/2</span>
             </div>
           </div>
-          <div className={cn('p-2 rounded-full text-muted-foreground transition-transform duration-300', expanded && 'rotate-180')}>
-            <ChevronDown className="w-4 h-4" />
+
+            <div className={cn('p-2 rounded-full text-muted-foreground transition-transform duration-300', expanded && 'rotate-180')}>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+          </button>
+
+          <div className="pr-4 shrink-0 flex items-center">
+            <AnkiBadge
+              size="sm"
+              as="div"
+              confirmed={ankiConfirmed}
+              onClick={handleAnkiBadgeClick}
+            />
           </div>
-        </button>
         </div>
 
         {/* Expanded body */}
@@ -516,6 +560,24 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
         initialSubjectId={system.subjectId}
         initialSystemId={system.id}
         initialTitle={`${system.name} Revision Score`}
+      />
+
+      {/* ── Anki Integration Setup Modal ────────────────────────────────────── */}
+      <AnkiSetupModal
+        open={showAnkiSetup}
+        onOpenChange={setShowAnkiSetup}
+        subjectName={subjectName}
+        systemName={system.name}
+        onConfirmed={() => setAnkiConfirmed(true)}
+      />
+
+      {/* ── Anki Post-Task Reminder Modal ────────────────────────────────────── */}
+      <AnkiPromptModal
+        open={showAnkiPrompt}
+        onOpenChange={setShowAnkiPrompt}
+        subjectName={subjectName}
+        systemName={system.name}
+        actionType={ankiActionType}
       />
     </>
   );

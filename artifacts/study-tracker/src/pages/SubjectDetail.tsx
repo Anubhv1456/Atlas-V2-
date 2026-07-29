@@ -9,6 +9,9 @@ import {
 import { SystemCard } from '@/components/SystemCard';
 import { AddDialog } from '@/components/AddDialog';
 import { ProgressBar } from '@/components/ProgressBar';
+import { AnkiBadge } from '@/components/AnkiLogo';
+import { AnkiSetupModal } from '@/components/AnkiSetupModal';
+import { isDeckConfirmed, formatDeckName, launchAnkiDeck } from '@/lib/anki';
 import { PYQYear } from '@/db/database';
 import { ScoreLogModal } from '@/components/ScoreLogModal';
 import {
@@ -275,6 +278,19 @@ export default function SubjectDetail() {
   const [editName,      setEditName]      = useState('');
   const [activeFilter,  setActiveFilter]  = useState<StageKey | null>(null);
 
+  // Anki state
+  const [showAnkiSetup, setShowAnkiSetup] = useState(false);
+  const [ankiConfirmed, setAnkiConfirmed] = useState(() => subject ? isDeckConfirmed(subject.name) : false);
+
+  const handleAnkiSubjectClick = () => {
+    if (!subject) return;
+    if (isDeckConfirmed(subject.name)) {
+      launchAnkiDeck(formatDeckName(subject.name));
+    } else {
+      setShowAnkiSetup(true);
+    }
+  };
+
   // Read highlight param — passed from search results
   const highlightId = (() => {
     const params = new URLSearchParams(search);
@@ -374,7 +390,15 @@ export default function SubjectDetail() {
           </DropdownMenu>
         </div>
 
-        <h1 className="text-3xl font-semibold text-foreground tracking-tight mb-6">{subject.name}</h1>
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <h1 className="text-3xl font-semibold text-foreground tracking-tight">{subject.name}</h1>
+          <AnkiBadge
+            size="md"
+            confirmed={isDeckConfirmed(subject.name)}
+            onClick={handleAnkiSubjectClick}
+            label={isDeckConfirmed(subject.name) ? 'Anki Subject Deck' : 'Setup Anki Subject Deck'}
+          />
+        </div>
 
         {/* Overall progress card */}
         <div className="bg-card border shadow-sm p-4 rounded-2xl flex items-center gap-4">
@@ -632,6 +656,15 @@ export default function SubjectDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Anki Subject Setup Modal ───────────────────────────────────────── */}
+      <AnkiSetupModal
+        open={showAnkiSetup}
+        onOpenChange={setShowAnkiSetup}
+        subjectName={subject.name}
+        allSystemNames={systems.map(s => s.name)}
+        onConfirmed={() => setAnkiConfirmed(true)}
+      />
     </div>
   );
 }
