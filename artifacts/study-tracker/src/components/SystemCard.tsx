@@ -99,7 +99,12 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   const handleContentTap = () => {
     if (isLongPress.current) return;
     if (!system.contentInitialized) { setInitValue(''); setShowInitDialog(true); return; }
-    if (system.contentCompleted) return;
+    if (system.contentCompleted) {
+      setEditCompleted(String(system.contentUnitsCompleted));
+      setEditTotal(String(system.contentUnitsTotal));
+      setShowEditContent(true);
+      return;
+    }
 
     const newCompleted = system.contentUnitsCompleted + 1;
     const isNowDone    = newCompleted >= system.contentUnitsTotal;
