@@ -288,6 +288,7 @@ export async function generateAnkiDeckHierarchyText(customRoot?: string): Promis
 }> {
   const rawSubjects = await db.subjects.toArray();
   const subjects = [...rawSubjects].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+  const rawSystems = await db.systems.toArray();
 
   const config = getAnkiConfig();
   const root = customRoot !== undefined ? customRoot : (config.rootDeckName?.trim() || config.rootDeck?.trim() || '');
@@ -299,7 +300,7 @@ export async function generateAnkiDeckHierarchyText(customRoot?: string): Promis
     deckList.push(root);
   }
 
-  // 2. Add ONLY Subject-Level Decks (NO system subdecks)
+  // 2. Add Subject-Level Decks
   subjects.forEach(subject => {
     const subjectDeck = formatDeckName(subject.name, undefined, root);
     if (subjectDeck && !deckList.includes(subjectDeck)) {
@@ -310,18 +311,33 @@ export async function generateAnkiDeckHierarchyText(customRoot?: string): Promis
   // Anki import file format with clear architecture metadata header and initialization rows
   let fileContent = `#separator:tab\n#html:true\n#columns:Front\tBack\tTags\n# Architecture: 1 Deck per Subject | System tags format: <Subject>::<System>\n\n`;
 
-  deckList.forEach(deck => {
-    // Extract display name from deck path (e.g. "NEETPG::Anatomy" -> "Anatomy")
-    const parts = deck.split('::');
-    const displayName = parts[parts.length - 1];
-    const isRoot = parts.length === 1 && deck === root;
+  // Master Root Deck note if root specified
+  if (root) {
+    fileContent += `#deck:${root}\n`;
+    fileContent += `[Atlas Root Deck] ${root}\tMaster Root Deck created for Atlas study tracker.\tAtlasRootInit\n\n`;
+  }
 
-    fileContent += `#deck:${deck}\n`;
-    if (isRoot) {
-      fileContent += `[Atlas Root Deck] ${displayName}\tMaster Root Deck created for Atlas study tracker.\tAtlasDeckInit\n\n`;
-    } else {
-      fileContent += `[Atlas Subject Deck] ${displayName}\tSubject deck initialized for Atlas study tracker. Filtered review uses '${displayName}::<System>' tags.\tAtlasDeckInit\n\n`;
-    }
+  // Subject Decks & System Notes
+  subjects.forEach(subject => {
+    const subjectDeck = formatDeckName(subject.name, undefined, root);
+    fileContent += `#deck:${subjectDeck}\n`;
+
+    // 1 Generic Subject Note
+    const subjectTag = sanitizeTagSegment(subject.name);
+    fileContent += `[Atlas Subject] ${subject.name}\tSubject deck initialized for ${subject.name}. Add flashcards or tag existing ones with '${subjectTag}::<System>'.\t${subjectTag}\n`;
+
+    // Filter systems for this subject
+    const subjectSystems = rawSystems
+      .filter(sys => sys.subjectId === subject.id)
+      .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+
+    // 1 Generic Note for EACH System under this subject tagged with <Subject>::<System>
+    subjectSystems.forEach(system => {
+      const systemTag = formatSystemTag(subject.name, system.name);
+      fileContent += `[Atlas System] ${subject.name} - ${system.name}\tSystem initialized for ${system.name} under ${subject.name}.\t${systemTag}\n`;
+    });
+
+    fileContent += `\n`;
   });
 
   return { text: fileContent, deckCount: deckList.length, deckList };

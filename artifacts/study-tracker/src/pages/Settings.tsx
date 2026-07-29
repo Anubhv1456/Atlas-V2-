@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink, Download, Copy, Check, FolderTree, FileText, Layers } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink, Download, Copy, Check, FolderTree, FileText, Layers, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -1021,12 +1021,67 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Manual Import Instructions */}
-              <div className="bg-muted/30 border border-border/60 rounded-xl p-3 text-xs space-y-1.5">
-                <span className="font-semibold text-foreground block text-xs">Manual Options:</span>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground text-[11px] leading-relaxed">
-                  <li><strong>Copy Deck List:</strong> Copy the formatted deck paths to paste when creating decks in Anki or AnkiMobile.</li>
-                  <li><strong>Download File:</strong> Download the <code className="bg-muted px-1 rounded font-mono">.txt</code> deck directive file to import via Anki's File &rarr; Import.</li>
+              {/* Manual Import Instructions & Anki / AnkiDroid Field Settings */}
+              <div className="bg-muted/30 border border-border/60 rounded-xl p-3 text-xs space-y-2.5">
+                <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
+                  <Info className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Anki / AnkiDroid Import Guide & Field Settings:</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] bg-background/80 p-2.5 rounded-lg border border-border/50 shadow-2xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Note Type</span>
+                    <strong className="text-blue-600 dark:text-blue-400 font-semibold">Basic</strong> <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">(Not Cloze!)</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Field Separator</span>
+                    <strong className="text-foreground font-semibold">Tab</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Allow HTML</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">ON (Enabled)</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Deck</span>
+                    <span className="text-foreground font-medium">Default <span className="text-[10px] text-muted-foreground">(Auto-routes)</span></span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-foreground block">Required Field Mapping:</span>
+                  <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] text-center">
+                    <div className="bg-muted/60 p-1.5 rounded border border-border/50">
+                      <span className="text-muted-foreground block text-[9px]">1: Front</span>
+                      <strong className="text-foreground">Front / Text</strong>
+                    </div>
+                    <div className="bg-muted/60 p-1.5 rounded border border-border/50">
+                      <span className="text-muted-foreground block text-[9px]">2: Back</span>
+                      <strong className="text-foreground">Back</strong>
+                    </div>
+                    <div className="bg-muted/60 p-1.5 rounded border border-border/50">
+                      <span className="text-muted-foreground block text-[9px]">3: Tags</span>
+                      <strong className="text-emerald-600 dark:text-emerald-400">Tags</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 text-[11px] text-emerald-900 dark:text-emerald-300 space-y-1.5">
+                  <span className="font-semibold block text-emerald-950 dark:text-emerald-200">How the .txt Setup File Works:</span>
+                  <p className="leading-relaxed">
+                    Anki's file importer requires notes to create decks and tags. The exported <code className="bg-emerald-500/20 px-1 rounded font-mono">.txt</code> file contains:
+                  </p>
+                  <ul className="list-disc list-inside space-y-0.5 text-[11px] pl-1 font-medium">
+                    <li><strong>1 Subject Setup Note</strong> per subject deck.</li>
+                    <li><strong>1 System Setup Note</strong> per system, tagged with <code className="bg-emerald-500/20 px-1 rounded font-mono">&lt;Subject&gt;::&lt;System&gt;</code>.</li>
+                  </ul>
+                  <p className="leading-relaxed text-[10.5px] pt-1 border-t border-emerald-500/20 text-emerald-800 dark:text-emerald-400">
+                    This automatically provisions all subject decks and pre-creates every system tag in Anki so system launch filters work immediately out of the box!
+                  </p>
+                </div>
+
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground text-[11px] leading-relaxed pt-1 border-t border-border/40">
+                  <li><strong>Download File:</strong> Save <code className="bg-muted px-1 rounded font-mono text-foreground">.txt</code> and select it in Anki/AnkiDroid &rarr; Import.</li>
+                  <li><strong>Copy Deck List:</strong> Paste deck names manually if creating decks without importing notes.</li>
                 </ul>
               </div>
             </div>
