@@ -390,13 +390,14 @@ export default function SubjectDetail() {
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <h1 className="text-3xl font-semibold text-foreground tracking-tight">{subject.name}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight min-w-0">{subject.name}</h1>
           <AnkiBadge
             size="md"
             confirmed={isDeckConfirmed(subject.name)}
             onClick={handleAnkiSubjectClick}
-            label={isDeckConfirmed(subject.name) ? 'Anki Subject Deck' : 'Setup Anki Subject Deck'}
+            label={isDeckConfirmed(subject.name) ? 'Anki Subject Deck' : 'Anki Subject Deck'}
+            className="self-start sm:self-auto"
           />
         </div>
 

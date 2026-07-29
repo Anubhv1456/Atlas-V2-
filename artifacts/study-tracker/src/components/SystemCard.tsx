@@ -275,47 +275,48 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
         )}
 
         {/* Header */}
-        <div className="w-full flex items-center transition-colors">
+        <div className="w-full flex items-center transition-colors min-w-0">
           {dragHandleProps && (
-            <div {...dragHandleProps} className="p-3 text-muted-foreground/30 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing">
-              <GripVertical className="w-5 h-5" />
+            <div {...dragHandleProps} className="p-2 sm:p-3 text-muted-foreground/30 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing shrink-0">
+              <GripVertical className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           )}
-          <button onClick={() => setExpanded(!expanded)} className={cn("flex-1 p-4 flex items-center justify-between text-left focus:outline-none hover:bg-muted/10", !dragHandleProps && "pl-4")}>
-            <div className="flex-1 pr-4">
-              <div className="flex items-center gap-3 mb-2">
-              <h4 className="font-semibold text-lg leading-tight text-foreground">{system.name}</h4>
-              <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border', statusColors[system.status])}>
-                {system.status}
-              </span>
-              {system.focus === 'primary' && (
-                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-primary/20 bg-primary/10 text-primary whitespace-nowrap">
-                  Primary Focus
+          <button onClick={() => setExpanded(!expanded)} className={cn("flex-1 min-w-0 p-3.5 sm:p-4 flex items-center justify-between text-left focus:outline-none hover:bg-muted/10", !dragHandleProps && "pl-4")}>
+            <div className="flex-1 min-w-0 pr-2">
+              <div className="flex items-center gap-2 sm:gap-3 mb-1.5 min-w-0 flex-wrap sm:flex-nowrap">
+                <h4 className="font-semibold text-base sm:text-lg leading-tight text-foreground truncate min-w-0">{system.name}</h4>
+                <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border shrink-0', statusColors[system.status])}>
+                  {system.status}
                 </span>
-              )}
-              {system.focus === 'secondary' && (
-                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-border bg-muted/50 text-muted-foreground whitespace-nowrap">
-                  Secondary Focus
-                </span>
-              )}
+                {system.focus === 'primary' && (
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-primary/20 bg-primary/10 text-primary whitespace-nowrap shrink-0">
+                    Primary Focus
+                  </span>
+                )}
+                {system.focus === 'secondary' && (
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-border bg-muted/50 text-muted-foreground whitespace-nowrap shrink-0">
+                    Secondary Focus
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <ProgressBar progress={progress} className="flex-1 h-1" />
+                <span className="text-[10px] font-mono text-muted-foreground min-w-[3ch] shrink-0">{completedCount}/2</span>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <ProgressBar progress={progress} className="flex-1 h-1" />
-              <span className="text-[10px] font-mono text-muted-foreground min-w-[3ch]">{completedCount}/2</span>
-            </div>
-          </div>
 
-            <div className={cn('p-2 rounded-full text-muted-foreground transition-transform duration-300', expanded && 'rotate-180')}>
+            <div className={cn('p-1.5 rounded-full text-muted-foreground transition-transform duration-300 shrink-0 ml-1', expanded && 'rotate-180')}>
               <ChevronDown className="w-4 h-4" />
             </div>
           </button>
 
-          <div className="pr-4 shrink-0 flex items-center">
+          <div className="pr-3 sm:pr-4 shrink-0 flex items-center">
             <AnkiBadge
               size="sm"
               as="div"
               confirmed={ankiConfirmed}
               onClick={handleAnkiBadgeClick}
+              label={ankiConfirmed ? 'Anki' : 'Anki Deck'}
             />
           </div>
         </div>

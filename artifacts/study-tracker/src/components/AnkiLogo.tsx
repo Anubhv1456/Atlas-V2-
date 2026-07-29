@@ -77,7 +77,7 @@ interface AnkiBadgeProps {
 
 export function AnkiBadge({ label, deckName, onClick, className, confirmed = true, size = 'md', as = 'button' }: AnkiBadgeProps) {
   const sizeClasses = {
-    sm: 'text-xs px-2 py-1 gap-1.5 h-7',
+    sm: 'text-[11px] sm:text-xs px-2 py-1 gap-1.5 h-7',
     md: 'text-xs px-2.5 py-1.5 gap-1.5 h-8',
     lg: 'text-sm px-3.5 py-2 gap-2 h-9',
   }[size];
@@ -91,7 +91,7 @@ export function AnkiBadge({ label, deckName, onClick, className, confirmed = tru
       onClick={onClick}
       title={deckName ? `Open Anki Deck: ${deckName}` : 'Anki Integration'}
       className={cn(
-        'inline-flex items-center font-medium rounded-xl transition-all duration-200 select-none shadow-2xs cursor-pointer',
+        'inline-flex items-center font-medium rounded-xl transition-all duration-200 select-none shadow-2xs cursor-pointer shrink-0 whitespace-nowrap',
         confirmed
           ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 active:scale-97'
           : 'bg-muted hover:bg-muted/80 text-muted-foreground border border-border/60 hover:border-blue-500/30',
@@ -100,7 +100,9 @@ export function AnkiBadge({ label, deckName, onClick, className, confirmed = tru
       )}
     >
       <AnkiLogo size={logoSize} variant="icon" />
-      <span>{label ?? (confirmed ? 'Anki' : 'Setup Anki')}</span>
+      <span className="shrink-0">
+        {label ?? (confirmed ? 'Anki' : 'Anki Deck')}
+      </span>
     </Component>
   );
 }
