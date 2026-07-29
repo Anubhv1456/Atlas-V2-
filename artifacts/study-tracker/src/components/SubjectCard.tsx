@@ -32,15 +32,15 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
       {dragHandleProps && (
         <div
           {...dragHandleProps}
-          className="p-4 pr-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing shrink-0"
+          className="p-3 sm:p-4 pr-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing shrink-0"
           aria-label="Drag to reorder subject"
         >
-          <GripVertical className="w-5 h-5" />
+          <GripVertical className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
       )}
-      <Link href={`/subjects/${subject.id}`} className={cn("flex-1 block p-5 select-none", dragHandleProps && "pl-2")}>
-        <div className="flex justify-between items-start mb-3 gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+      <Link href={`/subjects/${subject.id}`} className={cn("flex-1 min-w-0 block p-4 sm:p-5 select-none", dragHandleProps && "pl-1.5 sm:pl-2")}>
+        <div className="flex justify-between items-center mb-3 gap-2 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
             <div className={cn(
               "p-2 rounded-xl border shrink-0 transition-colors",
               isFullyComplete
@@ -49,16 +49,16 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
             )}>
               {isFullyComplete ? <CheckCircle2 className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
             </div>
-            <h3 className="font-semibold text-lg leading-tight text-foreground truncate group-hover:text-primary transition-colors">
+            <h3 className="font-semibold text-base sm:text-lg leading-tight text-foreground truncate min-w-0 flex-1 group-hover:text-primary transition-colors">
               {subject.name}
             </h3>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Badge
               variant="outline"
               className={cn(
-                "font-mono text-xs px-2.5 py-0.5 font-bold border-border/60",
+                "font-mono text-xs px-2 py-0.5 font-bold border-border/60 shrink-0",
                 isFullyComplete && "border-emerald-500/30 text-emerald-500 bg-emerald-500/5"
               )}
             >
@@ -69,7 +69,7 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
               <DropdownMenu>
                 <DropdownMenuTrigger
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </DropdownMenuTrigger>
@@ -94,18 +94,18 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
               </DropdownMenu>
             )}
 
-            <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
           </div>
         </div>
 
         <ProgressBar progress={progress} className="h-1.5 rounded-full" />
 
-        <div className="mt-3.5 flex justify-between items-center text-[11px] font-medium tracking-wide text-muted-foreground">
+        <div className="mt-3 flex justify-between items-center text-[11px] font-medium tracking-wide text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
             {systems.length} {systems.length === 1 ? 'System' : 'Systems'}
           </span>
-          <span className="font-mono text-xs text-foreground/80 font-semibold bg-muted/60 px-2 py-0.5 rounded-md border border-border/40">
+          <span className="font-mono text-[11px] text-foreground/80 font-semibold bg-muted/60 px-2 py-0.5 rounded-md border border-border/40">
             {completedTasks}/{totalTasks} tasks
           </span>
         </div>
