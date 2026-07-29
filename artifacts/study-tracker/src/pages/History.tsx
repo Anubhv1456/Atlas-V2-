@@ -2,29 +2,35 @@ import { useState } from 'react';
 import { useHistory } from '@/db/hooks';
 import { HistoryEntry } from '@/db/database';
 import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, RotateCw, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type StageKey = 'contentDone' | 'qbankDone';
+type FilterStageKey = 'contentDone' | 'qbankDone';
 
-const STAGES: { key: StageKey; label: string; color: string; bg: string }[] = [
+const FILTER_STAGES: { key: FilterStageKey; label: string; color: string; bg: string }[] = [
   { key: 'contentDone', label: 'Content', color: 'text-sky-600 dark:text-sky-400',    bg: 'bg-sky-100 dark:bg-sky-900/30' },
   { key: 'qbankDone',   label: 'QBank',   color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' },
 ];
 
-const STAGE_ICONS: Record<StageKey, typeof BookOpen> = {
-  contentDone: BookOpen,
-  qbankDone:   Layers,
+const STAGE_CONFIGS: Record<string, { label: string; color: string; bg: string; icon: typeof BookOpen }> = {
+  contentDone:     { label: 'Content', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-100 dark:bg-sky-900/30', icon: BookOpen },
+  contentProgress: { label: 'Content', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-100 dark:bg-sky-900/30', icon: BookOpen },
+  qbankDone:       { label: 'QBank', color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30', icon: Layers },
+  revision:        { label: 'Revision', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', icon: RotateCw },
+  pyqsDone:        { label: 'PYQ', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30', icon: Award },
 };
 
-function isMatchingStage(entry: HistoryEntry, filter: StageKey | null): boolean {
+function isMatchingStage(entry: HistoryEntry, filter: FilterStageKey | null): boolean {
   if (!filter) return true;
+  if (filter === 'contentDone') {
+    return entry.taskKey === 'contentDone' || entry.taskKey === 'contentProgress';
+  }
   return entry.taskKey === filter;
 }
 
 export default function History() {
   const history = useHistory();
-  const [filter, setFilter] = useState<StageKey | null>(null);
+  const [filter, setFilter] = useState<FilterStageKey | null>(null);
   const [calDate, setCalDate] = useState(new Date());
 
   const now = new Date();
@@ -83,7 +89,7 @@ export default function History() {
         >
           All
         </button>
-        {STAGES.map(s => (
+        {FILTER_STAGES.map(s => (
           <button
             key={s.key}
             onClick={() => setFilter(prev => prev === s.key ? null : s.key)}
@@ -164,7 +170,7 @@ export default function History() {
           </div>
           <p className="font-semibold text-foreground mb-1">No entries this month</p>
           <p className="text-sm text-muted-foreground">
-            {filter ? `No ${STAGES.find(s => s.key === filter)!.label} completions recorded.` : 'Nothing recorded yet.'}
+            {filter ? `No ${FILTER_STAGES.find(s => s.key === filter)!.label} completions recorded.` : 'Nothing recorded yet.'}
           </p>
         </div>
       ) : (
@@ -184,19 +190,19 @@ export default function History() {
 
               <div className="space-y-2 pl-12">
                 {entries.map((entry, idx) => {
-                  const stage    = STAGES.find(s => s.key === (entry.taskKey as StageKey)) ?? STAGES[0];
-                  const IconComp = STAGE_ICONS[entry.taskKey as StageKey] ?? BookOpen;
+                  const cfg      = STAGE_CONFIGS[entry.taskKey] ?? STAGE_CONFIGS.contentDone;
+                  const IconComp = cfg.icon;
                   return (
                     <div key={idx} className="bg-card border rounded-xl p-3 flex items-center gap-3 shadow-sm">
-                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', stage.bg)}>
-                        <IconComp className={cn('w-4 h-4', stage.color)} />
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', cfg.bg)}>
+                        <IconComp className={cn('w-4 h-4', cfg.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{entry.systemName}</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{entry.systemName || entry.taskLabel}</p>
                         <p className="text-xs text-muted-foreground truncate">{entry.subjectName}</p>
                       </div>
-                      <span className={cn('shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full', stage.bg, stage.color)}>
-                        {stage.label}
+                      <span className={cn('shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full', cfg.bg, cfg.color)}>
+                        {entry.taskLabel || cfg.label}
                       </span>
                     </div>
                   );

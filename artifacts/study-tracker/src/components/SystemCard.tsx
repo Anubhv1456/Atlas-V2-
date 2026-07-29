@@ -110,10 +110,20 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     const newCompleted = system.contentUnitsCompleted + 1;
     const isNowDone    = newCompleted >= system.contentUnitsTotal;
     updateSystem(system.id!, { contentUnitsCompleted: newCompleted, contentCompleted: isNowDone });
+
+    logCompletion({
+      subjectId: system.subjectId,
+      subjectName,
+      systemId: system.id!,
+      systemName: system.name,
+      taskKey: isNowDone ? 'contentDone' : 'contentProgress',
+      taskLabel: system.contentUnitsTotal > 0 ? `Content (${newCompleted}/${system.contentUnitsTotal})` : 'Content',
+      completedAt: new Date(),
+    });
+
     if (isNowDone) {
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#eab308', '#f59e0b', '#d97706'] });
-      logCompletion({ subjectId: system.subjectId, subjectName, systemId: system.id!, systemName: system.name, taskKey: 'contentDone', taskLabel: 'Content', completedAt: new Date() });
     }
   };
 
@@ -142,7 +152,23 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     const total = parseInt(editTotal, 10), completed = parseInt(editCompleted, 10);
     if (isNaN(total) || total <= 0 || isNaN(completed) || completed < 0) return;
     const clamped = Math.min(completed, total);
-    updateSystem(system.id!, { contentInitialized: true, contentUnitsTotal: total, contentUnitsCompleted: clamped, contentCompleted: clamped >= total });
+    const prevCompleted = system.contentUnitsCompleted;
+    const isNowDone = clamped >= total;
+
+    updateSystem(system.id!, { contentInitialized: true, contentUnitsTotal: total, contentUnitsCompleted: clamped, contentCompleted: isNowDone });
+
+    if (clamped > prevCompleted) {
+      logCompletion({
+        subjectId: system.subjectId,
+        subjectName,
+        systemId: system.id!,
+        systemName: system.name,
+        taskKey: isNowDone ? 'contentDone' : 'contentProgress',
+        taskLabel: `Content (${clamped}/${total})`,
+        completedAt: new Date(),
+      });
+    }
+
     setShowEditContent(false);
   };
 
