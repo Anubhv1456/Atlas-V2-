@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AnkiLogo } from './AnkiLogo';
-import { formatDeckName, setDeckConfirmed, setSubjectDecksConfirmed, launchAnkiDeck, isDeckConfirmed, saveAnkiConfig, getAnkiConfig } from '@/lib/anki';
-import { Copy, Check, ExternalLink, Sparkles, CheckCircle2, ShieldCheck, FolderPlus } from 'lucide-react';
+import { formatDeckName, formatAnkiSearchQuery, formatSystemTag, setDeckConfirmed, setSubjectDecksConfirmed, launchAnkiDeck, isDeckConfirmed, saveAnkiConfig, getAnkiConfig } from '@/lib/anki';
+import { Copy, Check, ExternalLink, FolderPlus, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AnkiSetupModalProps {
@@ -29,46 +29,37 @@ export function AnkiSetupModal({
   const [copied, setCopied] = useState(false);
   const [customRoot, setCustomRoot] = useState('');
   const [confirmAll, setConfirmAll] = useState(false);
-  const [customDeckOverride, setCustomDeckOverride] = useState('');
 
   const config = getAnkiConfig();
-  const defaultDeck = formatDeckName(subjectName, systemName, customRoot || undefined);
-  const activeDeckName = customDeckOverride.trim() || defaultDeck;
-  const isAlreadyConfirmed = isDeckConfirmed(subjectName, systemName);
+  const subjectDeck = formatDeckName(subjectName, undefined, customRoot || undefined);
+  const systemTag = systemName ? formatSystemTag(subjectName, systemName) : '';
+  const searchQuery = formatAnkiSearchQuery(subjectName, systemName, customRoot || undefined);
 
   useEffect(() => {
     if (open) {
       setCustomRoot(config.rootDeck || '');
       setCopied(false);
-      setCustomDeckOverride('');
     }
   }, [open, config.rootDeck]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(activeDeckName);
+  const handleCopyQuery = () => {
+    navigator.clipboard.writeText(searchQuery);
     setCopied(true);
-    toast({ title: 'Deck Name Copied!', description: `"${activeDeckName}" ready to paste in Anki.` });
+    toast({ title: 'Anki Search Query Copied!', description: `"${searchQuery}" ready for Anki search bar.` });
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleOpenAnki = () => {
-    launchAnkiDeck(activeDeckName);
+    launchAnkiDeck(subjectName, systemName);
     toast({
       title: 'Opening Anki...',
-      description: 'Redirecting to Anki deck / web fallback. Create or select your deck.',
+      description: `Filtering Anki to ${subjectDeck} (${systemTag || 'All topics'}).`,
     });
   };
 
   const handleConfirm = () => {
     if (customRoot !== config.rootDeck) {
       saveAnkiConfig({ rootDeck: customRoot });
-    }
-
-    if (customDeckOverride.trim()) {
-      const currentUrls = { ...config.customDeckUrls };
-      const key = systemName ? `${subjectName}::${systemName}` : subjectName;
-      currentUrls[key] = customDeckOverride.trim();
-      saveAnkiConfig({ customDeckUrls: currentUrls });
     }
 
     if (confirmAll && allSystemNames.length > 0) {
@@ -79,7 +70,7 @@ export function AnkiSetupModal({
 
     toast({
       title: 'Anki Link Verified! 🎉',
-      description: `Direct 1-click launch is now active for ${systemName ? systemName : subjectName}.`,
+      description: `Direct 1-click filtered launch active for ${systemName ? `${subjectName} → ${systemName}` : subjectName}.`,
     });
 
     onConfirmed?.();
@@ -96,51 +87,57 @@ export function AnkiSetupModal({
             </div>
             <div>
               <DialogTitle className="text-xl font-bold tracking-tight">
-                Anki Deck Setup
+                Anki Integration Architecture
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Connect {systemName ? `${subjectName} → ${systemName}` : subjectName} to your Anki deck hierarchy
+                1 Subject Deck ({subjectDeck}) + System Tag ({systemTag || 'System::*'})
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Deck Path Card */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Calculated Anki Deck Path
-            </Label>
-            <div className="flex items-center gap-2 p-3 bg-muted/60 dark:bg-muted/30 rounded-xl border border-border/60">
-              <span className="font-mono text-sm font-semibold text-foreground flex-1 truncate select-all">
-                {activeDeckName}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                className="h-8 px-2.5 rounded-lg text-xs hover:bg-background font-medium shrink-0"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
+          {/* Deck & Tag Query Breakdown */}
+          <div className="space-y-2 bg-muted/40 p-3.5 rounded-xl border border-border/60">
+            <div className="flex justify-between items-center text-xs font-semibold text-foreground">
+              <span>Target Subject Deck:</span>
+              <code className="font-mono bg-background px-2 py-0.5 rounded border border-border text-blue-600 dark:text-blue-400">{subjectDeck}</code>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Tip: In Anki, subdecks use double colons <code className="bg-muted px-1 py-0.5 rounded text-[10px]">::</code> (e.g. {subjectName}::{systemName || 'General'}).
-            </p>
-          </div>
-
-          {/* Action Step 1: Open Anki & Create */}
-          <div className="p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/15 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-                <FolderPlus className="w-4 h-4" />
-                <span>Step 1: Open Anki & Build Deck</span>
+            {systemName && (
+              <div className="flex justify-between items-center text-xs font-semibold text-foreground pt-1 border-t border-border/40">
+                <span>System Tag:</span>
+                <span className="font-mono bg-background px-2 py-0.5 rounded border border-border text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <Tag className="w-3 h-3" />
+                  {systemTag}
+                </span>
+              </div>
+            )}
+            <div className="pt-2 border-t border-border/40">
+              <div className="text-[11px] font-semibold text-muted-foreground mb-1">Search Query Used for Launching:</div>
+              <div className="flex items-center gap-2 bg-background p-2 rounded-lg border border-border/60">
+                <code className="font-mono text-xs text-foreground flex-1 truncate select-all">{searchQuery}</code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyQuery}
+                  className="h-7 px-2 rounded-md text-xs hover:bg-muted font-medium shrink-0"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                  {copied ? 'Copied' : 'Copy Query'}
+                </Button>
               </div>
             </div>
+          </div>
+
+          {/* Action Step 1: Launch Anki */}
+          <div className="p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/15 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
+              <FolderPlus className="w-4 h-4" />
+              <span>Step 1: Create Deck in Anki (One Deck per Subject)</span>
+            </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Click below to jump into Anki. Create or select a deck named <strong className="text-foreground">{activeDeckName}</strong>.
+              In Anki, make sure a deck named <strong className="text-foreground">{subjectDeck}</strong> exists. No subdecks needed!
             </p>
             <Button
               type="button"
@@ -150,7 +147,7 @@ export function AnkiSetupModal({
               className="w-full rounded-xl bg-background hover:bg-muted text-xs font-semibold h-9 border-blue-500/30 text-blue-600 dark:text-blue-400 shadow-2xs gap-1.5"
             >
               <AnkiLogo size={16} variant="icon" />
-              <span>Launch Anki & Select/Build Deck</span>
+              <span>Test Filtered Launch in Anki</span>
               <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
             </Button>
           </div>
@@ -158,13 +155,13 @@ export function AnkiSetupModal({
           {/* Root deck prefix edit */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground flex items-center justify-between">
-              <span>Optional Master Deck Prefix</span>
-              <span className="text-[10px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded">{subjectName}::{systemName || 'Subdeck'}</code></span>
+              <span>Optional Root Prefix</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded">{subjectName}</code></span>
             </Label>
             <Input
               value={customRoot}
               onChange={e => setCustomRoot(e.target.value)}
-              placeholder="Leave blank, or enter prefix like 'NEET PG' or 'AnKing'"
+              placeholder="e.g. 'NEET PG' or leave blank"
               className="h-9 text-xs rounded-xl bg-muted/40 border-border/60"
             />
           </div>
@@ -179,8 +176,8 @@ export function AnkiSetupModal({
                 className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 rounded-xs"
               />
               <div className="text-xs">
-                <span className="font-semibold text-foreground">Confirm for all systems in {subjectName}</span>
-                <p className="text-[11px] text-muted-foreground">Activates 1-click Anki link for all {allSystemNames.length} topics in this subject.</p>
+                <span className="font-semibold text-foreground">Confirm for all topics in {subjectName}</span>
+                <p className="text-[11px] text-muted-foreground">Enables 1-click launch for all {allSystemNames.length} topics in this subject.</p>
               </div>
             </label>
           )}
@@ -200,11 +197,12 @@ export function AnkiSetupModal({
             onClick={handleConfirm}
             className="w-full sm:flex-1 rounded-xl text-xs h-9 font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm gap-1.5"
           >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Confirm Deck Ready & Enable Link</span>
+            <Check className="w-4 h-4" />
+            <span>Confirm Subject Deck Ready</span>
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

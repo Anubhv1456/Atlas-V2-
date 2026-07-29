@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AnkiLogo, AnkiBadge } from '@/components/AnkiLogo';
-import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, generateAnkiDeckHierarchyText, downloadAnkiDeckHierarchyFile, syncDecksToAnkiConnect } from '@/lib/anki';
+import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, generateAnkiDeckHierarchyText, downloadAnkiDeckHierarchyFile, syncDecksToAnkiConnect, migrateNestedAnkiDecksAnkiConnect } from '@/lib/anki';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -78,6 +78,35 @@ export default function Settings() {
   } | null>(null);
   const [copiedAnkiList, setCopiedAnkiList] = useState(false);
   const [ankiSyncing, setAnkiSyncing] = useState(false);
+  const [migratingAnki, setMigratingAnki] = useState(false);
+  const [showAnkiMigrationDialog, setShowAnkiMigrationDialog] = useState(false);
+
+  const handleMigrateAnkiDecks = async () => {
+    setMigratingAnki(true);
+    try {
+      const res = await migrateNestedAnkiDecksAnkiConnect();
+      if (res.success) {
+        toast({
+          title: 'Anki Subdeck Migration Complete! 🎉',
+          description: res.message || 'Successfully moved cards to Subject decks and added System tags.',
+        });
+      } else {
+        toast({
+          title: 'AnkiConnect Notice',
+          description: res.message || 'Could not auto-migrate via AnkiConnect.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: 'Migration Failed',
+        description: e?.message || 'Failed to migrate subdecks.',
+        variant: 'destructive',
+      });
+    } finally {
+      setMigratingAnki(false);
+    }
+  };
 
   const handleUpdateAnkiRoot = (val: string) => {
     const updated = saveAnkiConfig({ rootDeckName: val });
@@ -620,11 +649,11 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-foreground text-sm">Unified Daily Review & Subdecks</h3>
-                  <Badge variant="secondary" className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none">Active</Badge>
+                  <h3 className="font-semibold text-foreground text-sm">Subject Decks & System Tags</h3>
+                  <Badge variant="secondary" className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none font-semibold">Clean Architecture</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Combines all subdecks into a single collective Daily Anki Review Pass while mapping Atlas subjects and systems to Anki subdecks.
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Atlas creates <strong>1 deck per subject</strong> (e.g., <code className="bg-muted px-1 rounded font-mono">Medicine</code>). System topics use <code className="bg-muted px-1 rounded font-mono">Subject::System</code> tags for targeted 1-click review.
                 </p>
               </div>
             </div>
@@ -632,25 +661,25 @@ export default function Settings() {
             <div className="space-y-2 pt-2 border-t border-border/50">
               <label className="text-xs font-medium text-foreground flex items-center justify-between">
                 <span>Master Deck Prefix (Optional)</span>
-                <span className="text-[11px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded font-mono">Subject::System</code></span>
+                <span className="text-[11px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded font-mono">Subject</code></span>
               </label>
               <div className="flex gap-2">
                 <Input
                   value={ankiConfig.rootDeckName}
                   onChange={(e) => handleUpdateAnkiRoot(e.target.value)}
-                  placeholder="Optional prefix, e.g. 'NEET PG' or 'AnKing' (or leave blank)"
+                  placeholder="e.g. 'NEETPG' (or leave blank)"
                   className="rounded-xl bg-muted/40 text-sm h-10"
                 />
               </div>
               <p className="text-[11px] text-muted-foreground font-mono">
-                Active Deck Hierarchy: {ankiConfig.rootDeckName ? `${ankiConfig.rootDeckName}::Subject::System` : 'Subject::System'}
+                Active Subject Deck Path: {ankiConfig.rootDeckName ? `${ankiConfig.rootDeckName}::Subject` : 'Subject'}
               </p>
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-border/50">
               <div>
                 <div className="font-medium text-xs text-foreground">Post-Task Flashcard Prompt</div>
-                <div className="text-[11px] text-muted-foreground">Show 1-click Anki reminder after QBank / Revision</div>
+                <div className="text-[11px] text-muted-foreground">Show 1-click Anki reminder with filtered search query after QBank/Revision</div>
               </div>
               <Switch
                 checked={ankiConfig.promptReminders}
@@ -660,16 +689,16 @@ export default function Settings() {
 
             <div className="flex items-center justify-between pt-3 border-t border-border/50">
               <div>
-                <div className="font-medium text-xs text-foreground">Verified Decks</div>
+                <div className="font-medium text-xs text-foreground">Verified Subject Decks</div>
                 <div className="text-[11px] text-muted-foreground">
-                  {Object.keys(ankiConfig.confirmedDecks || {}).length} system deck(s) setup
+                  {Object.keys(ankiConfig.confirmedDecks || {}).length} subject/system link(s) setup
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => launchAnkiDeck(ankiConfig.rootDeckName)}
+                  onClick={() => launchAnkiDeck(ankiConfig.rootDeckName || 'Atlas')}
                   className="rounded-xl text-xs h-8 font-semibold"
                 >
                   <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open Anki
@@ -687,24 +716,49 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Export Deck Hierarchy Action */}
+            {/* Sync with Anki Action */}
             <div className="pt-3 border-t border-border/50">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="pr-2">
                   <div className="font-medium text-xs text-foreground flex items-center gap-1.5">
                     <FolderTree className="w-4 h-4 text-blue-500" />
-                    <span>Export Deck Hierarchy to Anki</span>
+                    <span>Sync with Anki</span>
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    Mirror Atlas subjects & systems as empty Anki subdecks (zero cards created).
+                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Mirror your current Atlas subjects into Anki. Only subjects that exist in Atlas are created or updated. Existing Anki decks, cards, and review history are preserved.
                   </div>
                 </div>
                 <Button
                   size="sm"
                   onClick={handleOpenAnkiExport}
-                  className="rounded-xl text-xs h-8 font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                  className="rounded-xl text-xs h-8 font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shrink-0"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export Hierarchy
+                  <RefreshCw className="w-3.5 h-3.5" /> Sync with Anki
+                </Button>
+              </div>
+            </div>
+
+            {/* One-Time Migration Tool */}
+            <div className="pt-3 border-t border-border/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-xs text-foreground flex items-center gap-1.5">
+                    <RotateCcw className="w-4 h-4 text-amber-500" />
+                    <span>Legacy Subdeck Migration Tool</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Convert existing nested subdecks (<code className="bg-muted px-1 rounded font-mono">Subject::System</code>) to single Subject decks with <code className="bg-muted px-1 rounded font-mono">System::*</code> tags.
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleMigrateAnkiDecks}
+                  disabled={migratingAnki}
+                  className="rounded-xl text-xs h-8 font-semibold border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1.5 shrink-0"
+                >
+                  {migratingAnki ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {migratingAnki ? 'Migrating...' : '1-Click Migrate'}
                 </Button>
               </div>
             </div>
@@ -903,7 +957,7 @@ export default function Settings() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Anki Deck Hierarchy Export Dialog ──────────────────────────── */}
+      {/* ── Anki Subject Deck Initialization Dialog ──────────────────────────── */}
       <Dialog open={showAnkiExportDialog} onOpenChange={setShowAnkiExportDialog}>
         <DialogContent className="sm:max-w-[540px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[88vh] flex flex-col">
           <DialogHeader>
@@ -912,9 +966,9 @@ export default function Settings() {
                 <FolderTree className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-semibold">Anki Deck Hierarchy Export</DialogTitle>
+                <DialogTitle className="text-lg font-semibold">Anki Subject Decks Setup</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Export structure matching Atlas subjects & systems (zero cards created).
+                  Creates 1 deck per subject in Anki (zero subdecks, zero flashcards created).
                 </DialogDescription>
               </div>
             </div>
@@ -924,17 +978,17 @@ export default function Settings() {
             <div className="space-y-3.5 my-2 overflow-y-auto pr-1">
               <div className="bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-1.5">
                 <div className="flex justify-between items-center text-muted-foreground font-medium">
-                  <span>Total Generated Deck Paths:</span>
-                  <Badge variant="secondary" className="font-mono">{ankiDeckExportData.deckCount} Decks</Badge>
+                  <span>Total Subject Decks:</span>
+                  <Badge variant="secondary" className="font-mono">{ankiDeckExportData.deckCount} Subject Decks</Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Creates exact subdeck structures (e.g. <code className="bg-muted px-1 rounded font-mono">NEET PG::Anatomy::Embryology</code>) in Anki without generating any flashcards.
+                  Creates clean subject-level decks (e.g. <code className="bg-muted px-1 rounded font-mono">Medicine</code>, <code className="bg-muted px-1 rounded font-mono">Anatomy</code>) in Anki. Topics use <code className="bg-muted px-1 rounded font-mono">Subject::System</code> tags for filtered review.
                 </p>
               </div>
 
               {/* Hierarchy Preview */}
               <div>
-                <span className="text-xs font-semibold text-foreground mb-1.5 block">Deck Hierarchy Preview:</span>
+                <span className="text-xs font-semibold text-foreground mb-1.5 block">Subject Deck List:</span>
                 <div className="bg-black/90 text-emerald-400 font-mono text-[11px] p-3 rounded-xl max-h-40 overflow-y-auto space-y-1 border border-border/50 select-all">
                   {ankiDeckExportData.deckList.map((deck, idx) => (
                     <div key={idx} className="truncate flex items-center gap-1.5">

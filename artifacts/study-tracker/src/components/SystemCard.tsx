@@ -78,7 +78,7 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   const handleAnkiBadgeClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // prevent collapsing card if clicked on header
     if (isDeckConfirmed(subjectName, system.name)) {
-      launchAnkiDeck(formatDeckName(subjectName, system.name));
+      launchAnkiDeck(subjectName, system.name);
     } else {
       setShowAnkiSetup(true);
     }

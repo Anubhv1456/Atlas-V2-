@@ -1,8 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AnkiLogo } from './AnkiLogo';
-import { formatDeckName, launchAnkiDeck, getAnkiConfig, saveAnkiConfig } from '@/lib/anki';
-import { Copy, ExternalLink, Sparkles, Check, ArrowRight } from 'lucide-react';
+import { formatDeckName, formatAnkiSearchQuery, formatSystemTag, launchAnkiDeck } from '@/lib/anki';
+import { Copy, Sparkles, Check, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,21 +23,23 @@ export function AnkiPromptModal({
 }: AnkiPromptModalProps) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const deckName = formatDeckName(subjectName, systemName);
+
+  const subjectDeck = formatDeckName(subjectName);
+  const searchQuery = formatAnkiSearchQuery(subjectName, systemName);
 
   const handleLaunch = () => {
-    launchAnkiDeck(deckName);
+    const res = launchAnkiDeck(subjectName, systemName);
     toast({
-      title: 'Opening Anki Deck...',
-      description: `Targeting: ${deckName}`,
+      title: 'Opening Anki...',
+      description: `Target search query: ${res.searchQuery}`,
     });
     onOpenChange(false);
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(deckName);
+    navigator.clipboard.writeText(searchQuery);
     setCopied(true);
-    toast({ title: 'Deck Name Copied!', description: `"${deckName}" copied.` });
+    toast({ title: 'Query Copied!', description: `"${searchQuery}" copied to clipboard.` });
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -69,23 +71,30 @@ export function AnkiPromptModal({
 
         <div className="space-y-3 py-1">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            High-yield memory retention skyrockets when active recall flashcards are reviewed right after completing a topic.
+            Reviewing cards for <strong className="text-foreground">{subjectName} &rarr; {systemName}</strong> locks in active recall retention.
           </p>
 
           <div className="p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
-            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Target Deck</div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-sm font-bold text-foreground truncate">{deckName}</span>
+            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span>Filtered Search Query</span>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 lowercase font-mono">1 deck + tag filter</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 bg-background/80 p-2 rounded-lg border border-border/50">
+              <span className="font-mono text-xs font-bold text-foreground truncate select-all">{searchQuery}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={handleCopy}
-                className="h-7 px-2 rounded-lg text-xs hover:bg-background shrink-0"
+                className="h-7 px-2 rounded-lg text-xs hover:bg-muted shrink-0"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? 'Copied' : 'Copy Query'}
               </Button>
+            </div>
+            <div className="text-[11px] text-muted-foreground flex justify-between pt-0.5">
+              <span>Deck: <code className="font-mono bg-muted px-1 rounded">{subjectDeck}</code></span>
+              <span>Tag: <code className="font-mono bg-muted px-1 rounded">{formatSystemTag(subjectName, systemName)}</code></span>
             </div>
           </div>
         </div>
@@ -105,7 +114,7 @@ export function AnkiPromptModal({
             className="w-full sm:flex-1 rounded-xl text-xs h-9 font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm gap-1.5"
           >
             <AnkiLogo size={16} variant="icon" />
-            <span>Launch Anki Now</span>
+            <span>Open Filtered Anki Deck</span>
             <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-80" />
           </Button>
         </DialogFooter>
@@ -113,3 +122,4 @@ export function AnkiPromptModal({
     </Dialog>
   );
 }
+
