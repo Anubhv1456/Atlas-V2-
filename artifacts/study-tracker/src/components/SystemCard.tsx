@@ -418,19 +418,70 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
           <div className="py-4 space-y-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Completed Units</label>
-              <Input autoFocus type="number" min="0" value={editCompleted} onChange={e => setEditCompleted(e.target.value)}
-                className="text-lg py-5 px-4 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background" />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl border-border hover:bg-muted font-bold text-lg"
+                  onClick={() => setEditCompleted(prev => String(Math.max(0, (parseInt(prev, 10) || 0) - 1)))}
+                >
+                  -
+                </Button>
+                <Input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  value={editCompleted}
+                  onChange={e => setEditCompleted(e.target.value)}
+                  className="text-lg text-center font-mono py-5 px-3 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl border-border hover:bg-muted font-bold text-lg"
+                  onClick={() => setEditCompleted(prev => String(Math.min(parseInt(editTotal, 10) || 999, (parseInt(prev, 10) || 0) + 1)))}
+                >
+                  +
+                </Button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Total Units</label>
-              <Input type="number" min="1" value={editTotal} onChange={e => setEditTotal(e.target.value)}
-                className="text-lg py-5 px-4 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background" />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl border-border hover:bg-muted font-bold text-lg"
+                  onClick={() => setEditTotal(prev => String(Math.max(1, (parseInt(prev, 10) || 1) - 1)))}
+                >
+                  -
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editTotal}
+                  onChange={e => setEditTotal(e.target.value)}
+                  className="text-lg text-center font-mono py-5 px-3 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl border-border hover:bg-muted font-bold text-lg"
+                  onClick={() => setEditTotal(prev => String((parseInt(prev, 10) || 0) + 1))}
+                >
+                  +
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <div className="flex gap-2 w-full">
               <Button variant="ghost" onClick={() => setShowEditContent(false)} className="flex-1 rounded-xl">Cancel</Button>
-              <Button onClick={handleEditSave} disabled={!editTotal || parseInt(editTotal, 10) <= 0 || !editCompleted || parseInt(editCompleted, 10) < 0} className="flex-1 rounded-xl font-semibold shadow-sm">Save</Button>
+              <Button onClick={handleEditSave} disabled={!editTotal || parseInt(editTotal, 10) <= 0 || editCompleted === '' || parseInt(editCompleted, 10) < 0} className="flex-1 rounded-xl font-semibold shadow-sm">Save</Button>
             </div>
             <Button variant="ghost" onClick={handleEditReset} className="w-full rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10 text-sm">
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset Progress

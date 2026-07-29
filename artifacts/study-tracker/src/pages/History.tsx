@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useHistory } from '@/db/hooks';
+import { useHistory, deleteHistoryEntry } from '@/db/hooks';
 import { HistoryEntry } from '@/db/database';
 import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, RotateCw, Award } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, RotateCw, Award, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type FilterStageKey = 'contentDone' | 'qbankDone';
 
@@ -189,11 +190,11 @@ export default function History() {
               </div>
 
               <div className="space-y-2 pl-12">
-                {entries.map((entry, idx) => {
+                {entries.map((entry) => {
                   const cfg      = STAGE_CONFIGS[entry.taskKey] ?? STAGE_CONFIGS.contentDone;
                   const IconComp = cfg.icon;
                   return (
-                    <div key={idx} className="bg-card border rounded-xl p-3 flex items-center gap-3 shadow-sm">
+                    <div key={entry.id ?? `${entry.subjectId}-${entry.completedAt.toString()}`} className="group bg-card border rounded-xl p-3 flex items-center gap-3 shadow-sm hover:border-border/80 transition-colors">
                       <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', cfg.bg)}>
                         <IconComp className={cn('w-4 h-4', cfg.color)} />
                       </div>
@@ -204,6 +205,18 @@ export default function History() {
                       <span className={cn('shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full', cfg.bg, cfg.color)}>
                         {entry.taskLabel || cfg.label}
                       </span>
+                      {entry.id && (
+                        <button
+                          onClick={async () => {
+                            await deleteHistoryEntry(entry.id!);
+                            toast.success('History event deleted');
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                          title="Rollback / Delete event"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}

@@ -166,6 +166,10 @@ export async function logCompletion(entry: Omit<HistoryEntry, 'id'>) {
   return await db.history.add(entry);
 }
 
+export async function deleteHistoryEntry(id: number) {
+  return await db.history.delete(id);
+}
+
 // ── PYQ Year actions ───────────────────────────────────────────────────────
 
 /** Add a new year entry to a subject's PYQ section. */
