@@ -218,24 +218,39 @@ export async function generateAnkiDeckHierarchyText(customRoot?: string): Promis
   deckCount: number;
   deckList: string[];
 }> {
-  const subjects = await db.subjects.orderBy('order').toArray();
-  const systems = await db.systems.orderBy('order').toArray();
+  // Fix: Dexie store does not index 'order', so we fetch and sort in memory
+  const rawSubjects = await db.subjects.toArray();
+  const subjects = [...rawSubjects].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+
+  const rawSystems = await db.systems.toArray();
+  const systems = [...rawSystems].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+
   const config = getAnkiConfig();
   const root = customRoot !== undefined ? customRoot : (config.rootDeckName?.trim() || config.rootDeck?.trim() || '');
 
   const deckList: string[] = [];
 
+  // 1. Add Root Deck if specified
+  if (root && !deckList.includes(root)) {
+    deckList.push(root);
+  }
+
+  // 2. Add Subject and System Decks
   subjects.forEach(subject => {
-    const subjectSystems = systems.filter(s => s.subjectId === subject.id);
-    if (subjectSystems.length === 0) {
-      const deckName = formatDeckName(subject.name, undefined, root);
-      if (deckName && !deckList.includes(deckName)) deckList.push(deckName);
-    } else {
-      subjectSystems.forEach(sys => {
-        const deckName = formatDeckName(subject.name, sys.name, root);
-        if (deckName && !deckList.includes(deckName)) deckList.push(deckName);
-      });
+    // Subject parent deck name
+    const subjectDeck = formatDeckName(subject.name, undefined, root);
+    if (subjectDeck && !deckList.includes(subjectDeck)) {
+      deckList.push(subjectDeck);
     }
+
+    // System subdecks
+    const subjectSystems = systems.filter(s => s.subjectId === subject.id);
+    subjectSystems.forEach(sys => {
+      const systemDeck = formatDeckName(subject.name, sys.name, root);
+      if (systemDeck && !deckList.includes(systemDeck)) {
+        deckList.push(systemDeck);
+      }
+    });
   });
 
   // Anki deck import directive format
@@ -260,6 +275,56 @@ export async function downloadAnkiDeckHierarchyFile(customRoot?: string): Promis
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   return { count: deckCount, filename };
+}
+
+/**
+ * Sends createDeck calls directly to local Anki Desktop via AnkiConnect API (http://127.0.0.1:8765).
+ * Creates empty decks in Anki automatically with ZERO cards.
+ */
+export async function syncDecksToAnkiConnect(deckList: string[]): Promise<{
+  success: boolean;
+  createdCount: number;
+  error?: string;
+}> {
+  try {
+    let createdCount = 0;
+
+    for (const deck of deckList) {
+      const response = await fetch('http://127.0.0.1:8765', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createDeck',
+          version: 6,
+          params: { deck },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      if (data.result !== null) {
+        createdCount++;
+      }
+    }
+
+    return { success: true, createdCount };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('AnkiConnect sync failed:', message);
+    return {
+      success: false,
+      createdCount: 0,
+      error: message.includes('Failed to fetch')
+        ? 'AnkiConnect local service not detected. Make sure Anki Desktop is running with the AnkiConnect add-on (code 2055492159).'
+        : message,
+    };
+  }
 }
 
 

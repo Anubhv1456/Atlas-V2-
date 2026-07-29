@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AnkiLogo, AnkiBadge } from '@/components/AnkiLogo';
-import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, generateAnkiDeckHierarchyText, downloadAnkiDeckHierarchyFile } from '@/lib/anki';
+import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, generateAnkiDeckHierarchyText, downloadAnkiDeckHierarchyFile, syncDecksToAnkiConnect } from '@/lib/anki';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -77,6 +77,7 @@ export default function Settings() {
     deckCount: number;
   } | null>(null);
   const [copiedAnkiList, setCopiedAnkiList] = useState(false);
+  const [ankiSyncing, setAnkiSyncing] = useState(false);
 
   const handleUpdateAnkiRoot = (val: string) => {
     const updated = saveAnkiConfig({ rootDeckName: val });
@@ -95,21 +96,38 @@ export default function Settings() {
   };
 
   const handleOpenAnkiExport = async () => {
-    const data = await generateAnkiDeckHierarchyText();
-    setAnkiDeckExportData({
-      deckList: data.deckList,
-      fileText: data.text,
-      deckCount: data.deckCount,
-    });
-    setShowAnkiExportDialog(true);
+    try {
+      const data = await generateAnkiDeckHierarchyText();
+      setAnkiDeckExportData({
+        deckList: data.deckList,
+        fileText: data.text,
+        deckCount: data.deckCount,
+      });
+      setShowAnkiExportDialog(true);
+    } catch (e: any) {
+      console.error('Failed to generate Anki deck hierarchy:', e);
+      toast({
+        title: 'Export Failed',
+        description: e?.message || 'Could not fetch subjects/systems to generate deck hierarchy.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDownloadAnkiFile = async () => {
-    const { count } = await downloadAnkiDeckHierarchyFile();
-    toast({
-      title: 'Anki Deck File Downloaded! 📁',
-      description: `Exported ${count} deck path(s) ready for Anki import.`,
-    });
+    try {
+      const { count } = await downloadAnkiDeckHierarchyFile();
+      toast({
+        title: 'Anki Deck File Downloaded! 📁',
+        description: `Exported ${count} deck path(s) ready for Anki import.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Download Failed',
+        description: e?.message || 'Failed to generate file download.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleCopyAnkiList = () => {
@@ -122,6 +140,34 @@ export default function Settings() {
       description: 'Copied deck hierarchy list to clipboard.',
     });
     setTimeout(() => setCopiedAnkiList(false), 2000);
+  };
+
+  const handleSyncAnkiConnect = async () => {
+    if (!ankiDeckExportData || ankiDeckExportData.deckList.length === 0) return;
+    setAnkiSyncing(true);
+    try {
+      const res = await syncDecksToAnkiConnect(ankiDeckExportData.deckList);
+      if (res.success) {
+        toast({
+          title: 'Anki Decks Synced! 🎉',
+          description: `Successfully created/verified ${res.createdCount} deck(s) in local Anki Desktop with 0 cards!`,
+        });
+      } else {
+        toast({
+          title: 'AnkiConnect Notice',
+          description: res.error || 'Could not connect to local Anki.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: 'Sync Error',
+        description: e?.message || 'An unexpected error occurred during sync.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAnkiSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -859,54 +905,75 @@ export default function Settings() {
 
       {/* ── Anki Deck Hierarchy Export Dialog ──────────────────────────── */}
       <Dialog open={showAnkiExportDialog} onOpenChange={setShowAnkiExportDialog}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[85vh] flex flex-col">
+        <DialogContent className="sm:max-w-[540px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[88vh] flex flex-col">
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
                 <FolderTree className="w-5 h-5" />
               </div>
               <div>
                 <DialogTitle className="text-lg font-semibold">Anki Deck Hierarchy Export</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Export deck structure without generating any cards or notes.
+                  Export structure matching Atlas subjects & systems (zero cards created).
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           {ankiDeckExportData && (
-            <div className="space-y-4 my-2 overflow-y-auto pr-1">
-              <div className="bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-2">
+            <div className="space-y-3.5 my-2 overflow-y-auto pr-1">
+              <div className="bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-1.5">
                 <div className="flex justify-between items-center text-muted-foreground font-medium">
-                  <span>Total Generated Decks:</span>
+                  <span>Total Generated Deck Paths:</span>
                   <Badge variant="secondary" className="font-mono">{ankiDeckExportData.deckCount} Decks</Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Importing this file into Anki creates the exact nested deck & subdeck hierarchy matching your Atlas subjects & systems, without populating any cards.
+                  Creates exact subdeck structures (e.g. <code className="bg-muted px-1 rounded font-mono">NEET PG::Anatomy::Embryology</code>) in Anki without generating any flashcards.
                 </p>
               </div>
 
               {/* Hierarchy Preview */}
               <div>
                 <span className="text-xs font-semibold text-foreground mb-1.5 block">Deck Hierarchy Preview:</span>
-                <div className="bg-black/90 text-emerald-400 font-mono text-[11px] p-3 rounded-xl max-h-44 overflow-y-auto space-y-1 border border-border/50 select-all">
+                <div className="bg-black/90 text-emerald-400 font-mono text-[11px] p-3 rounded-xl max-h-40 overflow-y-auto space-y-1 border border-border/50 select-all">
                   {ankiDeckExportData.deckList.map((deck, idx) => (
-                    <div key={idx} className="truncate">
-                      {deck}
+                    <div key={idx} className="truncate flex items-center gap-1.5">
+                      <span className="text-emerald-600 dark:text-emerald-500/60 select-none">&bull;</span>
+                      <span>{deck}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Instructions */}
-              <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs space-y-1.5">
-                <span className="font-semibold text-blue-600 dark:text-blue-400 block">How to import into Anki:</span>
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-[11px] leading-relaxed">
-                  <li>Download the <code className="bg-muted px-1 rounded font-mono">.txt</code> deck hierarchy file below.</li>
-                  <li>Open Anki Desktop, AnkiMobile, or AnkiDroid.</li>
-                  <li>Go to <strong>File &rarr; Import</strong> and select the downloaded file.</li>
-                  <li>Anki will automatically build the nested subject and system subdecks.</li>
-                </ol>
+              {/* Instant AnkiConnect Sync Card */}
+              <div className="bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-3 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <div>
+                      <span className="font-semibold text-foreground block text-xs">1-Click Auto Sync (AnkiConnect)</span>
+                      <span className="text-[10px] text-muted-foreground">If Anki Desktop is running with AnkiConnect add-on</span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSyncAnkiConnect}
+                    disabled={ankiSyncing}
+                    className="rounded-xl text-xs h-8 px-3 font-semibold bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1.5"
+                  >
+                    {ankiSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <AnkiLogo className="w-3.5 h-3.5" />}
+                    {ankiSyncing ? 'Syncing...' : 'Sync to Anki'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Manual Import Instructions */}
+              <div className="bg-muted/30 border border-border/60 rounded-xl p-3 text-xs space-y-1.5">
+                <span className="font-semibold text-foreground block text-xs">Manual Options:</span>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground text-[11px] leading-relaxed">
+                  <li><strong>Copy Deck List:</strong> Copy the formatted deck paths to paste when creating decks in Anki or AnkiMobile.</li>
+                  <li><strong>Download File:</strong> Download the <code className="bg-muted px-1 rounded font-mono">.txt</code> deck directive file to import via Anki's File &rarr; Import.</li>
+                </ul>
               </div>
             </div>
           )}
@@ -919,7 +986,7 @@ export default function Settings() {
               className="rounded-xl text-xs h-9 font-medium gap-1.5 sm:w-auto w-full"
             >
               {copiedAnkiList ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedAnkiList ? 'Copied List!' : 'Copy Deck List'}
+              {copiedAnkiList ? 'Copied!' : 'Copy Deck List'}
             </Button>
             <Button
               size="sm"
