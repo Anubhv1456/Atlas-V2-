@@ -307,10 +307,21 @@ export async function generateAnkiDeckHierarchyText(customRoot?: string): Promis
     }
   });
 
-  // Anki import file format with clear architecture metadata header
-  let fileContent = `#separator:tab\n#html:true\n#tags:AtlasSubjectDecks\n# Architecture: 1 Deck per Subject | System tags format: System::<SystemName>\n`;
+  // Anki import file format with clear architecture metadata header and initialization rows
+  let fileContent = `#separator:tab\n#html:true\n#columns:Front\tBack\tTags\n# Architecture: 1 Deck per Subject | System tags format: <Subject>::<System>\n\n`;
+
   deckList.forEach(deck => {
+    // Extract display name from deck path (e.g. "NEETPG::Anatomy" -> "Anatomy")
+    const parts = deck.split('::');
+    const displayName = parts[parts.length - 1];
+    const isRoot = parts.length === 1 && deck === root;
+
     fileContent += `#deck:${deck}\n`;
+    if (isRoot) {
+      fileContent += `[Atlas Root Deck] ${displayName}\tMaster Root Deck created for Atlas study tracker.\tAtlasDeckInit\n\n`;
+    } else {
+      fileContent += `[Atlas Subject Deck] ${displayName}\tSubject deck initialized for Atlas study tracker. Filtered review uses '${displayName}::<System>' tags.\tAtlasDeckInit\n\n`;
+    }
   });
 
   return { text: fileContent, deckCount: deckList.length, deckList };
