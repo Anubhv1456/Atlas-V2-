@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useHistory, useAllSystems, useSubjects } from '@/db/hooks';
+import { useHistory, useAllSystems, useSubjects, deleteHistoryEntry } from '@/db/hooks';
 import { HistoryEntry, StudySystem } from '@/db/database';
 import {
   TimelineEvent,
@@ -17,24 +17,37 @@ import {
   getDay,
   isSameMonth,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, Clock, AlertCircle, CheckCircle2, Sparkles, Filter, Activity, TrendingUp, Flame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, Clock, AlertCircle, CheckCircle2, Sparkles, Filter, Activity, TrendingUp, Flame, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { isRevisionUpcoming, isRevisionOverdue, isRevisionDueToday, daysOverdue, sortSystemsByRevisionPriority } from '@/db/revisionEngine';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // ── Map a HistoryEntry → completed TimelineEvent ──────────────────────────────
 function historyToEvent(h: HistoryEntry): TimelineEvent {
   const typeMap: Record<string, TimelineEvent['eventType']> = {
-    contentDone: 'contentCompleted',
-    qbankDone:   'qbankDone',
-    pyqsDone:    'pyqsDone',
-    revision:    'revisionSystem',
+    contentDone:     'contentCompleted',
+    contentProgress: 'contentCompleted',
+    qbankDone:       'qbankDone',
+    pyqsDone:        'pyqsDone',
+    revision:        'revisionSystem',
   };
   const entityName = h.taskKey === 'pyqsDone'
     ? h.taskLabel
     : `${h.systemName} ${h.taskLabel}`;
   return {
     id:          String(h.id ?? `${h.systemId}-${h.taskKey}-${h.completedAt}`),
+    dbHistoryId: h.id,
     eventType:   typeMap[h.taskKey] ?? 'contentCompleted',
     entityName,
     subjectName: h.subjectName,
@@ -71,13 +84,13 @@ const EVENT_STYLE: Record<TimelineEvent['eventType'], { bg: string; text: string
 };
 
 // ── Event card ────────────────────────────────────────────────────────────────
-function EventCard({ event }: { event: TimelineEvent }) {
+function EventCard({ event, onRollback }: { event: TimelineEvent; onRollback?: (id: number) => void }) {
   const style = EVENT_STYLE[event.eventType];
   const { Icon } = style;
   const days = event.meta?.daysOverdue as number | undefined;
   const isDueToday = event.meta?.isDueToday as boolean | undefined;
   return (
-    <div className="bg-card border border-border/80 rounded-2xl p-3.5 flex items-center gap-3.5 shadow-sm hover:border-primary/40 transition-all duration-200">
+    <div className="group bg-card border border-border/80 rounded-2xl p-3.5 flex items-center gap-3.5 shadow-sm hover:border-primary/40 transition-all duration-200">
       <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border', style.bg)}>
         <Icon className={cn('w-4 h-4', style.text)} />
       </div>
@@ -108,14 +121,31 @@ function EventCard({ event }: { event: TimelineEvent }) {
       </div>
       {event.status === 'overdue' && <AlertCircle className="w-4 h-4 text-destructive shrink-0" />}
       {event.status === 'upcoming' && isDueToday && <Clock className="w-4 h-4 text-amber-500 shrink-0" />}
-      {event.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+      {event.status === 'completed' && (
+        <div className="flex items-center gap-2 shrink-0">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          {event.dbHistoryId && onRollback && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRollback(event.dbHistoryId!);
+              }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+              title="Rollback event & revert status"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Rollback</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
-function Section({ title, icon: Icon, iconClass, events, emptyText }: {
-  title: string; icon: typeof BookOpen; iconClass: string; events: TimelineEvent[]; emptyText: string;
+function Section({ title, icon: Icon, iconClass, events, emptyText, onRollback }: {
+  title: string; icon: typeof BookOpen; iconClass: string; events: TimelineEvent[]; emptyText: string; onRollback?: (id: number) => void;
 }) {
   return (
     <div>
@@ -132,13 +162,13 @@ function Section({ title, icon: Icon, iconClass, events, emptyText }: {
       </div>
       {events.length === 0
         ? <p className="text-sm text-muted-foreground/60 pl-8 italic">{emptyText}</p>
-        : <div className="space-y-2.5 pl-2">{events.map(e => <EventCard key={e.id} event={e} />)}</div>}
+        : <div className="space-y-2.5 pl-2">{events.map(e => <EventCard key={e.id} event={e} onRollback={onRollback} />)}</div>}
     </div>
   );
 }
 
 // ── Past-day group ────────────────────────────────────────────────────────────
-function PastDayGroup({ date, events }: { date: Date; events: TimelineEvent[] }) {
+function PastDayGroup({ date, events, onRollback }: { date: Date; events: TimelineEvent[]; onRollback?: (id: number) => void }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3">
@@ -151,7 +181,7 @@ function PastDayGroup({ date, events }: { date: Date; events: TimelineEvent[] })
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{events.length} task{events.length !== 1 ? 's' : ''} completed</p>
         </div>
       </div>
-      <div className="space-y-2.5 pl-12">{events.map(e => <EventCard key={e.id} event={e} />)}</div>
+      <div className="space-y-2.5 pl-12">{events.map(e => <EventCard key={e.id} event={e} onRollback={onRollback} />)}</div>
     </div>
   );
 }
@@ -164,6 +194,24 @@ export default function Timeline() {
   const [filter, setFilter]       = useState<TimelineFilter>('all');
   const [calDate, setCalDate]     = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [pendingRollbackId, setPendingRollbackId] = useState<number | null>(null);
+
+  const handleRollbackRequest = (id: number) => {
+    setPendingRollbackId(id);
+  };
+
+  const confirmRollback = async () => {
+    if (!pendingRollbackId) return;
+    try {
+      await deleteHistoryEntry(pendingRollbackId);
+      toast.success('Event rolled back & status reverted');
+    } catch (err) {
+      console.error('Failed to rollback history event:', err);
+      toast.error('Failed to rollback event');
+    } finally {
+      setPendingRollbackId(null);
+    }
+  };
 
   const now        = new Date();
   const monthStart = startOfMonth(calDate);
@@ -451,15 +499,15 @@ export default function Timeline() {
         {/* ── Sections ──────────────────────────────────────────────────────── */}
         <div className="space-y-10">
           {isCurrentMonth && (
-            <Section title="Today" icon={CalendarDays} iconClass="text-primary" events={todayEvents} emptyText="No revisions due or activity completed today." />
+            <Section title="Today" icon={CalendarDays} iconClass="text-primary" events={todayEvents} emptyText="No revisions due or activity completed today." onRollback={handleRollbackRequest} />
           )}
           
           {(isCurrentMonth || filteredUpcoming.length > 0) && (
-            <Section title="Upcoming" icon={Clock} iconClass="text-amber-500" events={filteredUpcoming} emptyText="No upcoming revisions this month." />
+            <Section title="Upcoming" icon={Clock} iconClass="text-amber-500" events={filteredUpcoming} emptyText="No upcoming revisions this month." onRollback={handleRollbackRequest} />
           )}
           
           {isCurrentMonth && (
-            <Section title="Overdue" icon={AlertCircle} iconClass="text-destructive" events={filteredOverdue} emptyText="Nothing overdue." />
+            <Section title="Overdue" icon={AlertCircle} iconClass="text-destructive" events={filteredOverdue} emptyText="Nothing overdue." onRollback={handleRollbackRequest} />
           )}
 
           {pastGrouped.length > 0 && (
@@ -472,7 +520,7 @@ export default function Timeline() {
                 <div className="flex-1 h-px bg-border/50" />
               </div>
               {pastGrouped.map(({ date, events }) => (
-                <PastDayGroup key={date.toISOString()} date={date} events={events} />
+                <PastDayGroup key={date.toISOString()} date={date} events={events} onRollback={handleRollbackRequest} />
               ))}
             </div>
           )}
@@ -492,6 +540,29 @@ export default function Timeline() {
           )}
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={pendingRollbackId !== null} onOpenChange={(open) => { if (!open) setPendingRollbackId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <RotateCcw className="w-5 h-5" /> Confirm Event Rollback
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to rollback this completed event? This will revert the completion status and update your study timeline accordingly.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRollback}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Rollback Event
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

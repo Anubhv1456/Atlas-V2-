@@ -1,3 +1,5 @@
+import { db } from '@/db/database';
+
 // ── Anki Integration Utilities & Helpers ─────────────────────────────────────
 
 export interface AnkiConfig {
@@ -208,4 +210,56 @@ export function toggleDailyAnkiPass(dateStr?: string): DailyAnkiPassState {
   }
   return updated;
 }
+
+// ── Anki Deck Hierarchy Exporter (No Cards Created) ─────────────────────────
+
+export async function generateAnkiDeckHierarchyText(customRoot?: string): Promise<{
+  text: string;
+  deckCount: number;
+  deckList: string[];
+}> {
+  const subjects = await db.subjects.orderBy('order').toArray();
+  const systems = await db.systems.orderBy('order').toArray();
+  const config = getAnkiConfig();
+  const root = customRoot !== undefined ? customRoot : (config.rootDeckName?.trim() || config.rootDeck?.trim() || '');
+
+  const deckList: string[] = [];
+
+  subjects.forEach(subject => {
+    const subjectSystems = systems.filter(s => s.subjectId === subject.id);
+    if (subjectSystems.length === 0) {
+      const deckName = formatDeckName(subject.name, undefined, root);
+      if (deckName && !deckList.includes(deckName)) deckList.push(deckName);
+    } else {
+      subjectSystems.forEach(sys => {
+        const deckName = formatDeckName(subject.name, sys.name, root);
+        if (deckName && !deckList.includes(deckName)) deckList.push(deckName);
+      });
+    }
+  });
+
+  // Anki deck import directive format
+  let fileContent = `#separator:tab\n#html:true\n#tags:AtlasDeckStructure\n`;
+  deckList.forEach(deck => {
+    fileContent += `#deck:${deck}\n`;
+  });
+
+  return { text: fileContent, deckCount: deckList.length, deckList };
+}
+
+export async function downloadAnkiDeckHierarchyFile(customRoot?: string): Promise<{ count: number; filename: string }> {
+  const { text, deckCount } = await generateAnkiDeckHierarchyText(customRoot);
+  const filename = `atlas-anki-deck-hierarchy.txt`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return { count: deckCount, filename };
+}
+
 

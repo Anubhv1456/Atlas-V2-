@@ -2,9 +2,19 @@ import { useState } from 'react';
 import { useHistory, deleteHistoryEntry } from '@/db/hooks';
 import { HistoryEntry } from '@/db/database';
 import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, RotateCw, Award, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, RotateCw, Award, Trash2, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type FilterStageKey = 'contentDone' | 'qbankDone';
 
@@ -33,6 +43,20 @@ export default function History() {
   const history = useHistory();
   const [filter, setFilter] = useState<FilterStageKey | null>(null);
   const [calDate, setCalDate] = useState(new Date());
+  const [pendingRollbackId, setPendingRollbackId] = useState<number | null>(null);
+
+  const confirmRollback = async () => {
+    if (!pendingRollbackId) return;
+    try {
+      await deleteHistoryEntry(pendingRollbackId);
+      toast.success('Event rolled back & status reverted');
+    } catch (err) {
+      console.error('Failed to rollback history entry:', err);
+      toast.error('Failed to rollback entry');
+    } finally {
+      setPendingRollbackId(null);
+    }
+  };
 
   const now = new Date();
 
@@ -207,14 +231,12 @@ export default function History() {
                       </span>
                       {entry.id && (
                         <button
-                          onClick={async () => {
-                            await deleteHistoryEntry(entry.id!);
-                            toast.success('History event deleted');
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                          title="Rollback / Delete event"
+                          onClick={() => setPendingRollbackId(entry.id!)}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all flex items-center gap-1 text-xs font-semibold cursor-pointer"
+                          title="Rollback event & revert status"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Rollback</span>
                         </button>
                       )}
                     </div>
@@ -225,6 +247,29 @@ export default function History() {
           ))}
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={pendingRollbackId !== null} onOpenChange={(open) => { if (!open) setPendingRollbackId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <RotateCcw className="w-5 h-5" /> Confirm Event Rollback
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to rollback this history event? This action will revert the topic or task status back to incomplete and remove this record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRollback}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Rollback Event
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

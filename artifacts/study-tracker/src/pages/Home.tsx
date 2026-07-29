@@ -417,7 +417,7 @@ export default function Home() {
             <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] shadow-sm border border-border/50 object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
               <div className="flex items-center gap-1.5 text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">
-                <Sparkles className="w-3 h-3" /> Active Recall Dashboard
+                <Sparkles className="w-3 h-3" /> Medical Mastery Engine
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{greeting}</h1>
             </div>
@@ -527,7 +527,7 @@ export default function Home() {
                 {/* Active Streak */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Streak</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Study Streak</span>
                     <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
                       <Flame className="w-4 h-4" />
                     </div>
@@ -543,7 +543,7 @@ export default function Home() {
                 {/* Overall Completion */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Completion</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Mastery Index</span>
                     <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                       <TrendingUp className="w-4 h-4" />
                     </div>
@@ -552,14 +552,14 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {overallProgress}%
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{completedTasks}/{totalTasks} tasks done</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{completedTasks}/{totalTasks} objectives done</div>
                   </div>
                 </div>
 
                 {/* Strong Systems */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Strong</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">High Mastery</span>
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
                       <Award className="w-4 h-4" />
                     </div>
@@ -568,14 +568,14 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {strongSystems} <span className="text-xs font-sans font-normal text-muted-foreground">/ {systems.length}</span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">High confidence topics</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Validated topic systems</div>
                   </div>
                 </div>
 
                 {/* Due Revisions */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Due Today</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Spaced Recall</span>
                     <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
                       <Clock className="w-4 h-4" />
                     </div>
@@ -584,7 +584,7 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {allDueRevisions.length}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Revisions scheduled</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Pending memory passes</div>
                   </div>
                 </div>
               </div>
@@ -593,7 +593,7 @@ export default function Home() {
             {/* ── Focus for Today ───────────────────────── */}
             <section className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                <Target className="w-3.5 h-3.5" /> Focus for Today
+                <Target className="w-3.5 h-3.5" /> Daily High-Yield Focus
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 {/* Primary Focus */}
@@ -733,7 +733,7 @@ export default function Home() {
             {insights.length > 0 && (
               <section className="mb-12">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> AI Knowledge Insights
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Strategic Insights
                 </h2>
                 <div className="grid gap-3">
                   {insights.map((insight) => (
@@ -772,8 +772,15 @@ export default function Home() {
 
             {/* ── Subjects list ─────────────────────────────────────────────── */}
             <section className="flex-1">
-              <div className="flex justify-between items-end mb-6">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Library</h2>
+              <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5" /> Subject Portfolio
+                  </h2>
+                  <span className="text-[10px] font-mono font-bold bg-muted px-2 py-0.5 rounded-full text-muted-foreground border border-border/40">
+                    {subjects.length}
+                  </span>
+                </div>
               </div>
 
               {subjects.length === 0 ? (

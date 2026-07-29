@@ -206,10 +206,26 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   };
 
   // ── QBank toggle ──────────────────────────────────────────────────────────
-  const toggleQBank = () => {
+  const toggleQBank = async () => {
     const wasChecked = system.qbankDone;
-    updateSystem(system.id!, { qbankDone: !wasChecked });
-    if (!wasChecked) {
+    if (wasChecked) {
+      const historyEntries = await db.history
+        .where('systemId')
+        .equals(system.id!)
+        .filter(h => h.taskKey === 'qbankDone')
+        .toArray();
+      if (historyEntries.length > 0) {
+        historyEntries.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+        await deleteHistoryEntry(historyEntries[0].id!);
+      } else {
+        await updateSystem(system.id!, {
+          qbankDone: false,
+          completionDate: null,
+          nextRevisionDate: null,
+        });
+      }
+    } else {
+      updateSystem(system.id!, { qbankDone: true });
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#2563eb', '#1d4ed8'] });
       logCompletion({ subjectId: system.subjectId, subjectName, systemId: system.id!, systemName: system.name, taskKey: 'qbankDone', taskLabel: 'Qbank', completedAt: new Date() });

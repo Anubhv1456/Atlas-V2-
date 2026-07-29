@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink, Download, Copy, Check, FolderTree, FileText, Layers } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AnkiLogo, AnkiBadge } from '@/components/AnkiLogo';
-import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck } from '@/lib/anki';
+import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, generateAnkiDeckHierarchyText, downloadAnkiDeckHierarchyFile } from '@/lib/anki';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -70,6 +70,13 @@ export default function Settings() {
 
   // Anki settings state
   const [ankiConfig, setAnkiConfigState] = useState(() => getAnkiConfig());
+  const [showAnkiExportDialog, setShowAnkiExportDialog] = useState(false);
+  const [ankiDeckExportData, setAnkiDeckExportData] = useState<{
+    deckList: string[];
+    fileText: string;
+    deckCount: number;
+  } | null>(null);
+  const [copiedAnkiList, setCopiedAnkiList] = useState(false);
 
   const handleUpdateAnkiRoot = (val: string) => {
     const updated = saveAnkiConfig({ rootDeckName: val });
@@ -85,6 +92,36 @@ export default function Settings() {
     const updated = saveAnkiConfig({ confirmedDecks: {} });
     setAnkiConfigState(updated);
     toast({ title: 'Anki Decks Reset', description: 'All deck verifications have been cleared.' });
+  };
+
+  const handleOpenAnkiExport = async () => {
+    const data = await generateAnkiDeckHierarchyText();
+    setAnkiDeckExportData({
+      deckList: data.deckList,
+      fileText: data.text,
+      deckCount: data.deckCount,
+    });
+    setShowAnkiExportDialog(true);
+  };
+
+  const handleDownloadAnkiFile = async () => {
+    const { count } = await downloadAnkiDeckHierarchyFile();
+    toast({
+      title: 'Anki Deck File Downloaded! 📁',
+      description: `Exported ${count} deck path(s) ready for Anki import.`,
+    });
+  };
+
+  const handleCopyAnkiList = () => {
+    if (!ankiDeckExportData) return;
+    const textToCopy = ankiDeckExportData.deckList.join('\n');
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedAnkiList(true);
+    toast({
+      title: 'Copied to Clipboard! 📋',
+      description: 'Copied deck hierarchy list to clipboard.',
+    });
+    setTimeout(() => setCopiedAnkiList(false), 2000);
   };
 
   useEffect(() => {
@@ -603,6 +640,28 @@ export default function Settings() {
                 )}
               </div>
             </div>
+
+            {/* Export Deck Hierarchy Action */}
+            <div className="pt-3 border-t border-border/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-xs text-foreground flex items-center gap-1.5">
+                    <FolderTree className="w-4 h-4 text-blue-500" />
+                    <span>Export Deck Hierarchy to Anki</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Mirror Atlas subjects & systems as empty Anki subdecks (zero cards created).
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleOpenAnkiExport}
+                  className="rounded-xl text-xs h-8 font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Hierarchy
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -793,6 +852,81 @@ export default function Settings() {
             </Button>
             <Button className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleConfirmRestoreSnapshot}>
               Restore Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Anki Deck Hierarchy Export Dialog ──────────────────────────── */}
+      <Dialog open={showAnkiExportDialog} onOpenChange={setShowAnkiExportDialog}>
+        <DialogContent className="sm:max-w-[500px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
+                <FolderTree className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-semibold">Anki Deck Hierarchy Export</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Export deck structure without generating any cards or notes.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {ankiDeckExportData && (
+            <div className="space-y-4 my-2 overflow-y-auto pr-1">
+              <div className="bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-2">
+                <div className="flex justify-between items-center text-muted-foreground font-medium">
+                  <span>Total Generated Decks:</span>
+                  <Badge variant="secondary" className="font-mono">{ankiDeckExportData.deckCount} Decks</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Importing this file into Anki creates the exact nested deck & subdeck hierarchy matching your Atlas subjects & systems, without populating any cards.
+                </p>
+              </div>
+
+              {/* Hierarchy Preview */}
+              <div>
+                <span className="text-xs font-semibold text-foreground mb-1.5 block">Deck Hierarchy Preview:</span>
+                <div className="bg-black/90 text-emerald-400 font-mono text-[11px] p-3 rounded-xl max-h-44 overflow-y-auto space-y-1 border border-border/50 select-all">
+                  {ankiDeckExportData.deckList.map((deck, idx) => (
+                    <div key={idx} className="truncate">
+                      {deck}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs space-y-1.5">
+                <span className="font-semibold text-blue-600 dark:text-blue-400 block">How to import into Anki:</span>
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-[11px] leading-relaxed">
+                  <li>Download the <code className="bg-muted px-1 rounded font-mono">.txt</code> deck hierarchy file below.</li>
+                  <li>Open Anki Desktop, AnkiMobile, or AnkiDroid.</li>
+                  <li>Go to <strong>File &rarr; Import</strong> and select the downloaded file.</li>
+                  <li>Anki will automatically build the nested subject and system subdecks.</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2 pt-2 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyAnkiList}
+              className="rounded-xl text-xs h-9 font-medium gap-1.5 sm:w-auto w-full"
+            >
+              {copiedAnkiList ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedAnkiList ? 'Copied List!' : 'Copy Deck List'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleDownloadAnkiFile}
+              className="rounded-xl text-xs h-9 font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 sm:flex-1 w-full"
+            >
+              <Download className="w-3.5 h-3.5" /> Download Anki File (.txt)
             </Button>
           </DialogFooter>
         </DialogContent>

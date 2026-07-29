@@ -18,6 +18,8 @@ export type TimelineEventStatus = 'completed' | 'upcoming' | 'overdue';
 export interface TimelineEvent {
   /** Unique key for React reconciliation (not persisted). */
   id: string;
+  /** Primary database key if this is a completed HistoryEntry */
+  dbHistoryId?: number;
   eventType: TimelineEventType;
   /** Human-readable label, e.g. "Cardiology Content" */
   entityName: string;

@@ -167,7 +167,87 @@ export async function logCompletion(entry: Omit<HistoryEntry, 'id'>) {
 }
 
 export async function deleteHistoryEntry(id: number) {
-  return await db.history.delete(id);
+  return await db.transaction('rw', db.history, db.systems, db.pyqYears, async () => {
+    const entry = await db.history.get(id);
+    if (!entry) return;
+
+    if (entry.taskKey === 'qbankDone' && entry.systemId) {
+      const sys = await db.systems.get(entry.systemId);
+      if (sys) {
+        await db.systems.update(entry.systemId, {
+          qbankDone: false,
+          completionDate: null,
+          nextRevisionDate: null,
+          updatedAt: new Date(),
+        });
+      }
+    } else if ((entry.taskKey === 'contentDone' || entry.taskKey === 'contentProgress') && entry.systemId) {
+      const sys = await db.systems.get(entry.systemId);
+      if (sys) {
+        let newCompletedUnits = sys.contentUnitsCompleted;
+        if (entry.taskKey === 'contentDone') {
+          if (sys.contentUnitsTotal > 0) {
+            newCompletedUnits = Math.max(0, sys.contentUnitsTotal - 1);
+          } else {
+            newCompletedUnits = 0;
+          }
+        } else {
+          newCompletedUnits = Math.max(0, sys.contentUnitsCompleted - 1);
+        }
+        await db.systems.update(entry.systemId, {
+          contentUnitsCompleted: newCompletedUnits,
+          contentCompleted: false,
+          completionDate: null,
+          nextRevisionDate: null,
+          updatedAt: new Date(),
+        });
+      }
+    } else if (entry.taskKey === 'pyqsDone' && entry.subjectId) {
+      const pyqs = await db.pyqYears.where('subjectId').equals(entry.subjectId).toArray();
+      const matchedPyq = pyqs.find(p => p.completed && entry.taskLabel.includes(p.year));
+      if (matchedPyq) {
+        await db.pyqYears.update(matchedPyq.id!, {
+          completed: false,
+          completedAt: null,
+        });
+      }
+    } else if (entry.taskKey === 'revision' && entry.systemId) {
+      const sys = await db.systems.get(entry.systemId);
+      if (sys) {
+        const newRevCount = Math.max(0, (sys.revisionCount ?? 1) - 1);
+        const remainingRevisions = await db.history
+          .where('systemId')
+          .equals(entry.systemId)
+          .filter(h => h.id !== id && h.taskKey === 'revision')
+          .toArray();
+
+        remainingRevisions.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+
+        let lastRevisionDate: Date | null = null;
+        let nextRevisionDate: Date | null = null;
+
+        if (remainingRevisions.length > 0) {
+          lastRevisionDate = new Date(remainingRevisions[0].completedAt);
+          const previousInterval = sys.currentRevisionInterval ?? 14;
+          const scheduled = scheduleNextRevision(sys.status, previousInterval, lastRevisionDate);
+          nextRevisionDate = scheduled.nextRevisionDate;
+        } else if (sys.completionDate) {
+          lastRevisionDate = null;
+          const scheduled = scheduleFirstRevision(sys.status, new Date(sys.completionDate));
+          nextRevisionDate = scheduled.nextRevisionDate;
+        }
+
+        await db.systems.update(entry.systemId, {
+          revisionCount: newRevCount,
+          lastRevisionDate,
+          nextRevisionDate,
+          updatedAt: new Date(),
+        });
+      }
+    }
+
+    await db.history.delete(id);
+  });
 }
 
 // ── PYQ Year actions ───────────────────────────────────────────────────────
@@ -218,6 +298,15 @@ export async function togglePYQYear(
       taskLabel: `${subjectName} PYQs ${year}`,
       completedAt: new Date(),
     });
+  } else {
+    const matching = await db.history
+      .where('subjectId')
+      .equals(subjectId)
+      .filter(h => h.taskKey === 'pyqsDone' && h.taskLabel.includes(year))
+      .toArray();
+    for (const entry of matching) {
+      if (entry.id) await db.history.delete(entry.id);
+    }
   }
 }
 

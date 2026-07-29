@@ -77,7 +77,7 @@ export function DailyAnkiCard({ subjects, systems, className }: DailyAnkiCardPro
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-foreground text-sm sm:text-base tracking-tight">
-                    Daily Anki Review Pass
+                    Daily Anki Mastery Pass
                   </h3>
                   {dailyPass.completed ? (
                     <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-semibold gap-1 px-2">
@@ -90,7 +90,7 @@ export function DailyAnkiCard({ subjects, systems, className }: DailyAnkiCardPro
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Clear your single collective daily repetition queue across all active subjects & subdecks.
+                  Consolidate your active repetition queue across all subjects & subdecks in a single daily pass.
                 </p>
               </div>
             </div>
