@@ -3,6 +3,7 @@ import { useSubjects, useAllSystems } from '@/db/hooks';
 import { StudySystem } from '@/db/database';
 import { Link } from 'wouter';
 import { Search as SearchIcon, BookOpen, LayoutList, ChevronRight, Clock, AlertCircle } from 'lucide-react';
+import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
@@ -117,14 +118,19 @@ export default function Search() {
 
       <div className="flex-1 mt-2">
         {!hasQuery ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground mt-20">
-            <SearchIcon className="w-12 h-12 mb-4 opacity-20" />
-            <p className="text-sm">Type or tap a filter to search</p>
-          </div>
+          <EmptyStateGraphic
+            icon={SearchIcon}
+            title="Search Portfolio"
+            description="Type a keyword or filter by preset categories above to instantly look up subjects and systems."
+            className="mt-8 border-none bg-transparent"
+          />
         ) : results.subjects.length === 0 && results.systems.length === 0 ? (
-          <div className="text-center mt-20 text-muted-foreground">
-            <p className="font-medium">No matching results found.</p>
-          </div>
+          <EmptyStateGraphic
+            icon={SearchIcon}
+            title="No Results Found"
+            description={`No subjects or systems match your query. Try searching by subject name or category filter.`}
+            className="mt-8 border-none bg-transparent"
+          />
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* Subjects */}

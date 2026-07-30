@@ -7,6 +7,7 @@ import {
   addPYQYear, updatePYQYear, deletePYQYear, togglePYQYear,
 } from '@/db/hooks';
 import { SystemCard } from '@/components/SystemCard';
+import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PYQYear } from '@/db/database';
@@ -474,21 +475,17 @@ export default function SubjectDetail() {
       {/* Systems list */}
       <section>
         {systems.length === 0 ? (
-          <div className="text-center py-16 px-4 bg-muted/30 rounded-3xl border border-dashed mt-8">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <LayoutList className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No systems yet</h3>
-            <p className="text-muted-foreground text-sm mb-6 max-w-[250px] mx-auto">
-              Break down {subject.name} into smaller, manageable systems or topics.
-            </p>
-            <button
-              onClick={() => setShowAddSystem(true)}
-              className="bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold shadow-sm hover:bg-primary/90 transition-colors"
-            >
-              Add First System
-            </button>
-          </div>
+          <EmptyStateGraphic
+            icon={LayoutList}
+            title="No Systems Added Yet"
+            description={`Break down ${subject.name} into smaller, structured systems or sub-topics to track progress.`}
+            action={
+              <Button onClick={() => setShowAddSystem(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
+                <Plus className="w-4 h-4" /> Add First System
+              </Button>
+            }
+            className="mt-6"
+          />
         ) : visibleSystems.length === 0 ? (
           <div className="text-center py-12 px-4 bg-muted/30 rounded-3xl border border-dashed">
             <p className="text-foreground font-semibold mb-1">All systems complete</p>
@@ -570,10 +567,10 @@ export default function SubjectDetail() {
       {systems.length > 0 && (
         <button
           onClick={() => setShowAddSystem(true)}
-          className="fixed bottom-20 right-6 md:bottom-8 md:right-8 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-40"
+          className="fixed bottom-24 right-6 w-12 h-12 bg-primary/10 text-primary border border-primary/20 rounded-full flex items-center justify-center hover:bg-primary/20 transition-all z-40 backdrop-blur-sm"
           aria-label="Add System"
         >
-          <Plus className="w-6 h-6" />
+          <Plus className="w-5 h-5" />
         </button>
       )}
 

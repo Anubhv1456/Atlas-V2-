@@ -17,6 +17,8 @@ import { toast as sonnerToast } from 'sonner';
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -26,6 +28,7 @@ import {
   Bar,
   ReferenceLine,
 } from 'recharts';
+import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import {
   BarChart3,
   TrendingUp,
@@ -443,10 +446,10 @@ export default function Analytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Spaced Repetition Compliance Rate */}
-        <div className="bg-card border border-primary/30 rounded-xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Revision Compliance</span>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <span className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">Revision Compliance</span>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
@@ -466,10 +469,10 @@ export default function Analytics() {
         </div>
 
         {/* Card 2: Average Score */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Average Score</span>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">Average Score</span>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
               <Award className="w-4 h-4" />
             </div>
           </div>
@@ -482,10 +485,10 @@ export default function Analytics() {
         </div>
 
         {/* Card 3: Memory Retrievability */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Memory Recall</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-indigo-500 transition-colors">Memory Recall</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center justify-center">
               <Activity className="w-4 h-4" />
             </div>
           </div>
@@ -498,10 +501,10 @@ export default function Analytics() {
         </div>
 
         {/* Card 4: Highest Mark */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Highest Mark</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-emerald-500 transition-colors">Highest Mark</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
@@ -514,11 +517,11 @@ export default function Analytics() {
         </div>
 
         {/* Card 5: Score Trend */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Score Trend</span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              stats.trend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">Score Trend</span>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
+              stats.trend >= 0 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
             }`}>
               {stats.trend >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
             </div>
@@ -798,21 +801,32 @@ export default function Analytics() {
           </div>
 
           {chartData.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border rounded-lg p-6 text-center">
-              <BarChart3 className="w-10 h-10 text-muted-foreground/40 mb-2" />
-              <p className="text-sm font-medium text-foreground">No score logs found</p>
-              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Log revision or PYQ scores to visualize your progress curve over time.
-              </p>
-              <Button onClick={() => setIsModalOpen(true)} size="sm" variant="outline" className="mt-4 text-xs">
-                Log Your First Score
-              </Button>
-            </div>
+            <EmptyStateGraphic
+              icon={BarChart3}
+              title="No Score Logs Recorded"
+              description="Log your revision results or PYQ test marks to render your retention and progress curves."
+              action={
+                <Button onClick={() => setIsModalOpen(true)} size="sm" className="text-xs gap-1.5 rounded-xl shadow-xs">
+                  <Plus className="w-3.5 h-3.5" /> Log First Score
+                </Button>
+              }
+              className="h-72 border-none bg-muted/20"
+            />
           ) : (
             <div className="h-72 w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="scoreAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#a855f7" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 11, fill: 'currentColor' }}
@@ -829,18 +843,18 @@ export default function Analytics() {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-popover border border-border p-3 rounded-xl shadow-xl text-xs space-y-1.5 max-w-xs">
-                            <div className="flex items-center justify-between gap-3 border-b border-border pb-1">
+                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-3 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-xs">
+                            <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5">
                               <span className="font-bold text-foreground">{data.title}</span>
-                              <Badge className="text-[10px] py-0 px-1.5">{data.type}</Badge>
+                              <Badge className="text-[10px] py-0 px-1.5 rounded-md">{data.type}</Badge>
                             </div>
-                            <p className="text-[11px] text-muted-foreground">{data.fullDate}</p>
+                            <p className="text-[11px] text-muted-foreground font-medium">{data.fullDate}</p>
                             <div className="flex items-center justify-between text-xs pt-1">
                               <span className="font-medium text-muted-foreground">Score: {data.scoreStr}</span>
                               <span className="font-bold font-mono text-primary text-sm">{data.percentage}%</span>
                             </div>
                             {data.notes && (
-                              <p className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded italic">
+                              <p className="text-[11px] text-muted-foreground bg-muted/60 p-2 rounded-xl italic">
                                 "{data.notes}"
                               </p>
                             )}
@@ -850,23 +864,24 @@ export default function Analytics() {
                       return null;
                     }}
                   />
-                  <ReferenceLine y={75} stroke="rgba(16, 185, 129, 0.5)" strokeDasharray="4 4" label={{ value: 'Target (75%)', fill: '#10b981', fontSize: 10 }} />
-                  <Line
+                  <ReferenceLine y={75} stroke="rgba(16, 185, 129, 0.6)" strokeDasharray="4 4" label={{ value: 'Target (75%)', fill: '#10b981', fontSize: 10, fontWeight: 600 }} />
+                  <Area
                     type="monotone"
                     dataKey="percentage"
                     stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ r: 5, fill: '#3b82f6', strokeWidth: 2, stroke: '#ffffff' }}
-                    activeDot={{ r: 7, fill: '#2563eb' }}
+                    strokeWidth={2.5}
+                    fill="url(#scoreAreaGrad)"
+                    dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#ffffff' }}
+                    activeDot={{ r: 6, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
         </div>
 
         {/* System Breakdown Bar Chart */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+        <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4">
           <div>
             <h2 className="text-base font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-500" />
@@ -876,8 +891,8 @@ export default function Analytics() {
           </div>
 
           {systemBreakdownData.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border rounded-lg p-6 text-center">
-              <p className="text-xs text-muted-foreground">No system data available</p>
+            <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border/60 rounded-xl p-6 text-center">
+              <p className="text-xs text-muted-foreground font-medium">No system data available</p>
             </div>
           ) : (
             <div className="h-72 w-full pt-2">
@@ -891,9 +906,9 @@ export default function Analytics() {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-popover border border-border p-2.5 rounded-lg text-xs space-y-1 shadow-lg">
+                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-3 rounded-xl text-xs space-y-1 shadow-lg">
                             <p className="font-bold">{data.fullName}</p>
-                            <p className="text-muted-foreground font-mono">Average Score: {data.average}%</p>
+                            <p className="text-muted-foreground font-mono">Average Score: <strong className="text-primary">{data.average}%</strong></p>
                             <p className="text-[10px] text-muted-foreground">Based on {data.count} log(s)</p>
                           </div>
                         );
@@ -901,7 +916,7 @@ export default function Analytics() {
                       return null;
                     }}
                   />
-                  <Bar dataKey="average" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="average" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

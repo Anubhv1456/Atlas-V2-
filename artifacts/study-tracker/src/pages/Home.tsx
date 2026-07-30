@@ -2,6 +2,7 @@ import { useRef, useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useSubjects, useAllSystems, addSubject, updateSubject, deleteSubject, useCurrentStreak, setFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
+import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -791,18 +792,16 @@ export default function Home() {
               </div>
 
               {subjects.length === 0 ? (
-                <div className="text-center py-12 px-4 border border-border/50 rounded-xl bg-card/30">
-                  <div className="w-12 h-12 flex items-center justify-center mx-auto mb-4 opacity-50">
-                    <BookOpen className="w-6 h-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-muted-foreground text-sm font-medium">The library is empty.</p>
-                  <button
-                    onClick={() => setShowAddSubject(true)}
-                    className="mt-6 text-primary hover:text-primary/80 transition-colors text-sm font-medium tracking-wide uppercase"
-                  >
-                    + Add Subject
-                  </button>
-                </div>
+                <EmptyStateGraphic
+                  icon={BookOpen}
+                  title="Your Subject Library is Empty"
+                  description="Add your first core medical or academic subject to organize topics, systems, and track revision schedules."
+                  action={
+                    <Button onClick={() => setShowAddSubject(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
+                      <Plus className="w-4 h-4" /> Add First Subject
+                    </Button>
+                  }
+                />
               ) : (
                 <DragDropContext onDragEnd={handleSubjectDragEnd}>
                   <Droppable droppableId="subjects-list">

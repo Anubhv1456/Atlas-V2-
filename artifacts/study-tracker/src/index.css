@@ -276,4 +276,13 @@
   .glass-panel {
     @apply bg-background/80 backdrop-blur-xl border border-border/60;
   }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2.5s infinite ease-in-out;
+  }
 }
