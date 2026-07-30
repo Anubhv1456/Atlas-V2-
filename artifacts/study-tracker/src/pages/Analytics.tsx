@@ -2,7 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ScoreLog, Subject, StudySystem } from '@/db/database';
 import { setFocus } from '@/db/hooks';
-import { sortSystemsByRevisionPriority, calculateDecayScore, isRevisionOverdue, daysOverdue } from '@/db/revisionEngine';
+import {
+  sortSystemsByRevisionPriority,
+  calculateDecayScore,
+  isRevisionOverdue,
+  daysOverdue,
+  hasRevisionScheduled,
+  isRevisionDue,
+  getRetrievability,
+} from '@/db/revisionEngine';
 import { ScoreLogModal } from '@/components/ScoreLogModal';
 import { useLocation } from 'wouter';
 import { toast as sonnerToast } from 'sonner';
@@ -33,6 +41,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Sparkles,
+  ShieldCheck,
+  Activity,
+  Clock,
+  AlertTriangle,
+  RefreshCw,
+  Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +54,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function Analytics() {
   const { toast } = useToast();
@@ -144,6 +159,96 @@ export default function Analytics() {
 
     return { avgPercentage, totalLogs: filteredLogs.length, highestScore, trend };
   }, [filteredLogs]);
+
+  // Spaced Repetition Compliance Metrics
+  const complianceMetrics = useMemo(() => {
+    const scheduledSystems = systems.filter(sys => hasRevisionScheduled(sys));
+    const totalScheduled = scheduledSystems.length;
+
+    if (totalScheduled === 0) {
+      return {
+        rate: 100,
+        totalScheduled: 0,
+        onScheduleCount: 0,
+        dueTodayCount: 0,
+        overdueCount: 0,
+        avgRetrievability: 100,
+        subjectBreakdown: [],
+        statusLabel: 'No Active Revisions',
+        statusBadgeClass: 'bg-muted text-muted-foreground border-border',
+      };
+    }
+
+    let onScheduleCount = 0;
+    let dueTodayCount = 0;
+    let overdueCount = 0;
+    let totalRetrievability = 0;
+
+    const subComplianceMap = new Map<number, { total: number; compliant: number; overdue: number }>();
+
+    scheduledSystems.forEach(sys => {
+      const isOverdue = isRevisionOverdue(sys);
+      const isDueTdy = isRevisionDue(sys) && !isOverdue;
+      const retrievability = getRetrievability(sys);
+      totalRetrievability += retrievability;
+
+      if (isOverdue) {
+        overdueCount += 1;
+      } else {
+        onScheduleCount += 1;
+        if (isDueTdy) dueTodayCount += 1;
+      }
+
+      if (sys.subjectId) {
+        if (!subComplianceMap.has(sys.subjectId)) {
+          subComplianceMap.set(sys.subjectId, { total: 0, compliant: 0, overdue: 0 });
+        }
+        const entry = subComplianceMap.get(sys.subjectId)!;
+        entry.total += 1;
+        if (!isOverdue) entry.compliant += 1;
+        else entry.overdue += 1;
+      }
+    });
+
+    const rate = Math.round((onScheduleCount / totalScheduled) * 1000) / 10;
+    const avgRetrievability = Math.round((totalRetrievability / totalScheduled) * 10) / 10;
+
+    const subjectBreakdown = Array.from(subComplianceMap.entries()).map(([subId, data]) => {
+      const subName = subjectMap.get(subId)?.name || 'Subject';
+      const subRate = Math.round((data.compliant / data.total) * 100);
+      return {
+        subjectId: subId,
+        name: subName,
+        total: data.total,
+        compliant: data.compliant,
+        overdue: data.overdue,
+        rate: subRate,
+      };
+    }).sort((a, b) => a.rate - b.rate);
+
+    let statusLabel = 'High Compliance';
+    let statusBadgeClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+
+    if (rate < 60) {
+      statusLabel = 'Critical Debt';
+      statusBadgeClass = 'bg-destructive/10 text-destructive border-destructive/30';
+    } else if (rate < 85) {
+      statusLabel = 'Moderate Debt';
+      statusBadgeClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
+    }
+
+    return {
+      rate,
+      totalScheduled,
+      onScheduleCount,
+      dueTodayCount,
+      overdueCount,
+      avgRetrievability,
+      subjectBreakdown,
+      statusLabel,
+      statusBadgeClass,
+    };
+  }, [systems, subjectMap]);
 
   // Chart data formatting
   const chartData = useMemo(() => {
@@ -336,7 +441,31 @@ export default function Analytics() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Card 1: Spaced Repetition Compliance Rate */}
+        <div className="bg-card border border-primary/30 rounded-xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">Revision Compliance</span>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="flex items-baseline justify-between gap-1">
+              <p className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-foreground">
+                {complianceMetrics.rate}%
+              </p>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${complianceMetrics.statusBadgeClass}`}>
+                {complianceMetrics.statusLabel}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {complianceMetrics.onScheduleCount}/{complianceMetrics.totalScheduled} systems on schedule
+            </p>
+          </div>
+        </div>
+
+        {/* Card 2: Average Score */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Average Score</span>
@@ -352,6 +481,23 @@ export default function Analytics() {
           </div>
         </div>
 
+        {/* Card 3: Memory Retrievability */}
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Memory Recall</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-indigo-500 tracking-tight">
+              {complianceMetrics.avgRetrievability}%
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Estimated memory retention</p>
+          </div>
+        </div>
+
+        {/* Card 4: Highest Mark */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Highest Mark</span>
@@ -367,7 +513,8 @@ export default function Analytics() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        {/* Card 5: Score Trend */}
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Score Trend</span>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -385,21 +532,160 @@ export default function Analytics() {
             <p className="text-[11px] text-muted-foreground mt-0.5">vs prior test window</p>
           </div>
         </div>
+      </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Tests Logged</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
+      {/* ── Dedicated Spaced Repetition Compliance Engine Hub ────────────────── */}
+      <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-foreground">
+                  Spaced Repetition Compliance Engine
+                </h2>
+                <Badge className={`text-[11px] font-bold px-2.5 py-0.5 border ${complianceMetrics.statusBadgeClass}`}>
+                  {complianceMetrics.statusLabel}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Measures adherence to scheduled system revisions on or before due date, preventing memory decay debt.
+              </p>
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight">
-              {stats.totalLogs}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setLocation('/timeline')}
+            className="shrink-0 gap-1.5 text-xs font-semibold rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            View Revision Timeline
+          </Button>
+        </div>
+
+        {/* Compliance Progress Bar & Metrics Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+          <div className="md:col-span-3 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-primary" /> System Revision Portfolio Compliance
+              </span>
+              <span className="font-mono font-bold text-primary text-sm">
+                {complianceMetrics.rate}% Adherence
+              </span>
+            </div>
+
+            {/* Multi-segment stacked progress bar */}
+            <div className="h-3.5 w-full bg-muted rounded-full overflow-hidden flex gap-0.5 p-0.5 border border-border/60">
+              {complianceMetrics.totalScheduled === 0 ? (
+                <div className="w-full bg-muted-foreground/20 rounded-full" />
+              ) : (
+                <>
+                  <div
+                    style={{ width: `${(complianceMetrics.onScheduleCount / complianceMetrics.totalScheduled) * 100}%` }}
+                    className="bg-emerald-500 h-full rounded-l-full transition-all duration-500"
+                    title={`${complianceMetrics.onScheduleCount} Systems On Schedule`}
+                  />
+                  {complianceMetrics.dueTodayCount > 0 && (
+                    <div
+                      style={{ width: `${(complianceMetrics.dueTodayCount / complianceMetrics.totalScheduled) * 100}%` }}
+                      className="bg-amber-500 h-full transition-all duration-500"
+                      title={`${complianceMetrics.dueTodayCount} Systems Due Today`}
+                    />
+                  )}
+                  {complianceMetrics.overdueCount > 0 && (
+                    <div
+                      style={{ width: `${(complianceMetrics.overdueCount / complianceMetrics.totalScheduled) * 100}%` }}
+                      className="bg-destructive h-full rounded-r-full transition-all duration-500"
+                      title={`${complianceMetrics.overdueCount} Systems Overdue`}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground gap-2 pt-0.5">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                On Schedule: <strong className="text-foreground">{complianceMetrics.onScheduleCount}</strong>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                Due Today: <strong className="text-foreground">{complianceMetrics.dueTodayCount}</strong>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-destructive inline-block" />
+                Overdue (Debt): <strong className="text-foreground">{complianceMetrics.overdueCount}</strong>
+              </span>
+              <span className="flex items-center gap-1 font-mono">
+                Est. Retrievability: <strong className="text-primary">{complianceMetrics.avgRetrievability}%</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Stat Box */}
+          <div className="bg-muted/30 border border-border/60 rounded-xl p-3.5 text-center space-y-1">
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider block">
+              Compliance Goal
+            </span>
+            <p className="text-xl font-extrabold font-mono text-primary">≥ 85.0%</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              {complianceMetrics.rate >= 85
+                ? '✅ Excellent! Your spaced repetition retention curve is protected.'
+                : '⚠️ Action needed to clear overdue revisions and avoid memory decay.'}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Total recorded attempts</p>
           </div>
         </div>
+
+        {/* Subject-Wise Spaced Compliance Breakdown */}
+        {complianceMetrics.subjectBreakdown.length > 0 && (
+          <div className="pt-2 border-t border-border/40 space-y-3">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-primary" /> Subject-Wise Compliance Breakdown
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {complianceMetrics.subjectBreakdown.map((sub) => (
+                <div key={sub.subjectId} className="bg-background border border-border/70 rounded-xl p-3 space-y-2 hover:border-primary/40 transition-colors">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground truncate max-w-[140px]">{sub.name}</span>
+                    <span className={cn(
+                      'font-mono font-bold text-xs px-1.5 py-0.5 rounded border',
+                      sub.rate >= 85
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : sub.rate >= 60
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'border-destructive/30 bg-destructive/10 text-destructive'
+                    )}>
+                      {sub.rate}%
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${sub.rate}%` }}
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        sub.rate >= 85 ? 'bg-emerald-500' : sub.rate >= 60 ? 'bg-amber-500' : 'bg-destructive'
+                      )}
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium">
+                    <span>{sub.compliant} of {sub.total} Systems Compliant</span>
+                    {sub.overdue > 0 && (
+                      <span className="text-destructive font-semibold">{sub.overdue} Overdue</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filter & Density Control Bar */}

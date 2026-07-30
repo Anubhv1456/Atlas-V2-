@@ -44,6 +44,8 @@ export interface StudySystem {
   currentRevisionInterval: number | null;
   /** Absolute date the next revision is due. */
   nextRevisionDate: Date | null;
+  /** Decay Calibration factor (1.0 = standard, >1.0 = faster decay / complex topic, <1.0 = slower decay / high retention). Defaults to 1.0. */
+  decayFactor?: number;
 }
 
 /** One year entry under a subject's PYQ section. */
@@ -200,6 +202,23 @@ export class AtlasDB extends Dexie {
       pyqYears: '++id, subjectId',
       scoreLogs: '++id, type, subjectId, systemId, pyqYearId, timestamp',
     });
+    // v10: add system-level decay calibration factor
+    this.version(10).stores({
+      subjects: '++id, name, order',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus',
+      history: '++id, subjectId, systemId, completedAt',
+      pyqYears: '++id, subjectId',
+      scoreLogs: '++id, type, subjectId, systemId, pyqYearId, timestamp',
+    }).upgrade(tx => {
+      return tx
+        .table('systems')
+        .toCollection()
+        .modify((sys: Record<string, unknown>) => {
+          if (!('decayFactor' in sys) || sys['decayFactor'] === undefined || sys['decayFactor'] === null) {
+            sys['decayFactor'] = 1.0;
+          }
+        });
+    });
   }
 }
 
@@ -258,6 +277,7 @@ export async function importData(data: {
           if (!('currentRevisionInterval' in s)) base.currentRevisionInterval = null;
           if (!('nextRevisionDate' in s))        base.nextRevisionDate = null;
           if (!('focus' in s))                   base.focus = null;
+          if (!('decayFactor' in s) || base.decayFactor === undefined) base.decayFactor = 1.0;
           if (base.completionDate)    base.completionDate    = new Date(base.completionDate as unknown as string);
           if (base.lastRevisionDate)  base.lastRevisionDate  = new Date(base.lastRevisionDate as unknown as string);
           if (base.nextRevisionDate)  base.nextRevisionDate  = new Date(base.nextRevisionDate as unknown as string);

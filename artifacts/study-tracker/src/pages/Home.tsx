@@ -7,13 +7,13 @@ import { FocusDialog } from '@/components/FocusDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil, Flame, Award, Sparkles, TrendingUp } from 'lucide-react';
+import { Plus, BookOpen, Layers, Search as SearchIcon, X, ChevronRight, Clock, AlertCircle, Target, XCircle, Activity, ArrowUpRight, CheckCircle, Lightbulb, Lock, Pencil, Flame, Award, Sparkles, TrendingUp, Brain } from 'lucide-react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
 import { runSearch } from '@/lib/searchUtils';
-import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calculateDecayScore, daysOverdue } from '@/db/revisionEngine';
+import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calculateDecayScore, daysOverdue, getRetrievability, getRetrievabilityHealth, getDailyRevisionQueue, getSystemDecayFactor } from '@/db/revisionEngine';
 import { format } from 'date-fns';
 import { StudySystem, Subject } from '@/db/database';
 import { calculateOverallProgress, calculateSubjectProgress } from '@/lib/progress';
@@ -35,19 +35,26 @@ function StatusBadge({ sys }: { sys: StudySystem }) {
 
 function RevisionPill({ sys }: { sys: StudySystem }) {
   if (!sys.completionDate) return null;
+  const retrievability = getRetrievability(sys);
+  const health = getRetrievabilityHealth(retrievability);
+  const decayFactor = getSystemDecayFactor(sys);
+
   if (isRevisionOverdue(sys)) return (
-    <span className="flex items-center gap-0.5 text-[10px] text-destructive font-semibold shrink-0">
-      <AlertCircle className="w-2.5 h-2.5" />Overdue
+    <span className="flex items-center gap-1 text-[10px] font-bold text-destructive shrink-0 bg-destructive/10 px-2.5 py-0.5 rounded-full border border-destructive/20">
+      <AlertCircle className="w-2.5 h-2.5" />{retrievability}% ({daysOverdue(sys)}d overdue)
+      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   if (isRevisionDue(sys)) return (
-    <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-500 font-semibold shrink-0">
-      <Clock className="w-2.5 h-2.5" />Due today
+    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-500 shrink-0 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+      <Clock className="w-2.5 h-2.5" />{retrievability}% Due today
+      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   if (sys.nextRevisionDate) return (
-    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-      <Clock className="w-2.5 h-2.5" />{format(new Date(sys.nextRevisionDate), 'MMM d')}
+    <span className={cn("flex items-center gap-1 text-[10px] font-semibold shrink-0 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/40", health.colorClass)}>
+      <Brain className="w-2.5 h-2.5" />{retrievability}% Recall
+      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   return null;
@@ -525,10 +532,10 @@ export default function Home() {
             <section className="mb-8">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {/* Active Streak */}
-                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-colors">
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Study Streak</span>
-                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-amber-500 transition-colors">Study Streak</span>
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
                       <Flame className="w-4 h-4" />
                     </div>
                   </div>
@@ -541,10 +548,10 @@ export default function Home() {
                 </div>
 
                 {/* Overall Completion */}
-                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/30 transition-colors">
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Mastery Index</span>
-                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">Mastery Index</span>
+                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
                       <TrendingUp className="w-4 h-4" />
                     </div>
                   </div>
@@ -557,10 +564,10 @@ export default function Home() {
                 </div>
 
                 {/* Strong Systems */}
-                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-colors">
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">High Mastery</span>
-                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-emerald-500 transition-colors">High Mastery</span>
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                       <Award className="w-4 h-4" />
                     </div>
                   </div>
@@ -573,10 +580,10 @@ export default function Home() {
                 </div>
 
                 {/* Due Revisions */}
-                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/30 transition-colors">
+                <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Spaced Recall</span>
-                    <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-sky-500 transition-colors">Spaced Recall</span>
+                    <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500 border border-sky-500/20">
                       <Clock className="w-4 h-4" />
                     </div>
                   </div>

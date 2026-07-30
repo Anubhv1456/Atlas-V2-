@@ -4,15 +4,17 @@ import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, com
 import { ProgressBar } from './ProgressBar';
 import { ConfidenceDialog } from './ConfidenceDialog';
 import { ScoreLogModal } from './ScoreLogModal';
-import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award } from 'lucide-react';
+import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award, Sliders, MoreVertical, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format, formatDistanceToNow } from 'date-fns';
-import { isRevisionDue, isRevisionOverdue, daysOverdue } from '@/db/revisionEngine';
+import { isRevisionDue, isRevisionOverdue, daysOverdue, getRetrievability, getRetrievabilityHealth, DECAY_CALIBRATION_PRESETS, getSystemDecayFactor } from '@/db/revisionEngine';
 import { calculateSystemProgress } from '@/lib/progress';
+import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 
 interface SystemCardProps {
@@ -55,6 +57,11 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
   const [showEvalDialog, setShowEvalDialog]   = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showScoreModal, setShowScoreModal]       = useState(false);
+  const [showDecayCalibration, setShowDecayCalibration] = useState(false);
+
+  // Rename dialog state
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameValue, setRenameValue]             = useState(system.name);
 
   // Guard to prevent re-triggering if already open
   const evalShownRef = useRef(false);
@@ -220,6 +227,18 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
     deleteSystem(system.id!);
   };
 
+  const handleRenameSave = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    if (trimmed !== system.name) {
+      await updateSystem(system.id!, { name: trimmed });
+      toast.success('System Renamed', {
+        description: `Renamed to "${trimmed}" successfully.`,
+      });
+    }
+    setShowRenameDialog(false);
+  };
+
   const handleRevisionComplete = async () => {
     if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#10b981', '#059669', '#047857'] });
@@ -264,7 +283,18 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
               <GripVertical className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           )}
-          <button onClick={() => setExpanded(!expanded)} className={cn("flex-1 min-w-0 p-3.5 sm:p-4 flex items-center justify-between text-left focus:outline-none hover:bg-muted/10", !dragHandleProps && "pl-4")}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setExpanded(!expanded)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setExpanded(!expanded);
+              }
+            }}
+            className={cn("flex-1 min-w-0 p-3.5 sm:p-4 flex items-center justify-between text-left focus:outline-none hover:bg-muted/10 cursor-pointer select-none", !dragHandleProps && "pl-4")}
+          >
             <div className="flex-1 min-w-0 pr-2">
               <div className="flex items-center gap-2 sm:gap-3 mb-1.5 min-w-0 flex-wrap sm:flex-nowrap">
                 <h4 className="font-semibold text-base sm:text-lg leading-tight text-foreground truncate min-w-0">{system.name}</h4>
@@ -281,6 +311,13 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                     Secondary Focus
                   </span>
                 )}
+                {getSystemDecayFactor(system) !== 1.0 && (
+                  <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-semibold border whitespace-nowrap shrink-0',
+                    getSystemDecayFactor(system) > 1.0 ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  )}>
+                    {getSystemDecayFactor(system) > 1.0 ? '⚡' : '🛡️'} {getSystemDecayFactor(system)}x Decay
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <ProgressBar progress={progress} className="flex-1 h-1" />
@@ -288,10 +325,42 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
               </div>
             </div>
 
-            <div className={cn('p-1.5 rounded-full text-muted-foreground transition-transform duration-300 shrink-0 ml-1', expanded && 'rotate-180')}>
-              <ChevronDown className="w-4 h-4" />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenameValue(system.name);
+                      setShowRenameDialog(true);
+                    }}
+                    className="gap-2 py-2 cursor-pointer text-xs"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete();
+                    }}
+                    className="text-destructive focus:text-destructive gap-2 py-2 cursor-pointer text-xs font-medium"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className={cn('p-1.5 rounded-full text-muted-foreground transition-transform duration-300 shrink-0', expanded && 'rotate-180')}>
+                <ChevronDown className="w-4 h-4" />
+              </div>
             </div>
-          </button>
+          </div>
         </div>
 
         {/* Expanded body */}
@@ -339,21 +408,121 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                   </div>
                 </div>
 
+                {/* ── System Memory Decay Calibration (Collapsible) ───────────────────── */}
+                <div className="bg-muted/20 border border-border/60 rounded-xl overflow-hidden transition-all">
+                  <button
+                    type="button"
+                    onClick={() => setShowDecayCalibration(!showDecayCalibration)}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Memory Decay Calibration
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        'text-[10px] font-bold px-2.5 py-0.5 rounded-full border',
+                        getSystemDecayFactor(system) > 1.0
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : getSystemDecayFactor(system) < 1.0
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'border-primary/20 bg-primary/10 text-primary'
+                      )}>
+                        {getSystemDecayFactor(system).toFixed(2)}x Speed
+                      </span>
+                      <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform duration-200', showDecayCalibration && 'rotate-180')} />
+                    </div>
+                  </button>
+
+                  {showDecayCalibration && (
+                    <div className="px-3.5 pb-3.5 pt-1 border-t border-border/40 space-y-3">
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Calibrate memory decay speed for <span className="font-semibold text-foreground">{system.name}</span> based on topic complexity or volatile facts.
+                      </p>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {DECAY_CALIBRATION_PRESETS.map((p) => {
+                          const isSelected = Math.abs(getSystemDecayFactor(system) - p.factor) < 0.05;
+                          return (
+                            <button
+                              key={p.factor}
+                              type="button"
+                              onClick={async () => {
+                                await updateSystem(system.id!, { decayFactor: p.factor });
+                                toast.success(`Decay Calibrated: ${p.label}`, {
+                                  description: `${system.name} memory decay rate set to ${p.factor}x.`,
+                                });
+                              }}
+                              className={cn(
+                                'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
+                                isSelected
+                                  ? 'bg-primary/10 border-primary text-primary font-bold shadow-2xs ring-1 ring-primary'
+                                  : 'bg-background hover:bg-muted/60 border-border text-muted-foreground'
+                              )}
+                            >
+                              <span className="text-base mb-0.5">{p.icon}</span>
+                              <span className="text-[11px] font-semibold leading-tight">{p.label}</span>
+                              <span className="text-[9px] opacity-75 mt-0.5 font-mono">{p.factor}x</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-1 space-y-1.5">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="text-muted-foreground font-medium">Fine-tune Decay Factor</span>
+                          <span className="font-mono font-semibold text-foreground">{getSystemDecayFactor(system).toFixed(2)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.05"
+                          value={getSystemDecayFactor(system)}
+                          onChange={async (e) => {
+                            const val = parseFloat(e.target.value);
+                            await updateSystem(system.id!, { decayFactor: val });
+                          }}
+                          className="w-full accent-primary h-1.5 bg-muted rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-muted-foreground font-medium">
+                          <span>0.5x (Sticky Concept)</span>
+                          <span>1.0x (Standard)</span>
+                          <span>2.0x (Volatile Facts)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Revision details — shown only once revision engine is active */}
                 {system.completionDate && (
                   <div className="bg-muted/40 rounded-xl p-4 space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Revision</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spaced Recall Engine</p>
+                      {(() => {
+                        const ret = getRetrievability(system);
+                        const health = getRetrievabilityHealth(ret);
+                        return (
+                          <span className={cn('text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-background/80 shadow-xs', health.colorClass)}>
+                            {ret}% Recall • {health.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <RevisionRow label="Revisions Completed" value={String(system.revisionCount ?? 0)} />
                     <RevisionRow
                       label="Last Revised"
                       value={system.lastRevisionDate ? formatDistanceToNow(new Date(system.lastRevisionDate), { addSuffix: true }) : 'Never'}
                     />
                     <RevisionRow
-                      label="Current Interval"
+                      label="Memory Stability"
                       value={system.currentRevisionInterval ? `${system.currentRevisionInterval} days` : '—'}
                     />
                     <RevisionRow
-                      label="Next Revision"
+                      label="Next Recall Due"
                       value={system.nextRevisionDate
                         ? format(new Date(system.nextRevisionDate), 'MMM d, yyyy')
                         : '—'}
@@ -391,13 +560,6 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Weak Areas / Notes</label>
                   <Textarea value={system.weakAreas} onChange={handleNotesChange} placeholder="Note down concepts you struggle with..."
                     className="min-h-[100px] resize-none rounded-xl bg-muted/30 border-transparent focus-visible:bg-background focus-visible:border-primary" />
-                </div>
-
-                {/* Delete */}
-                <div className="flex justify-end pt-4 mt-2 border-t border-border/50">
-                  <button onClick={handleDelete} className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 font-medium px-4 py-2 rounded-lg hover:bg-destructive/10 transition-colors">
-                    <Trash2 className="w-4 h-4" /> Delete System
-                  </button>
                 </div>
               </div>
             </div>
@@ -504,6 +666,31 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
             <Button variant="ghost" onClick={handleEditReset} className="w-full rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10 text-sm">
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset Progress
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Rename system dialog ─────────────────────────────────────────── */}
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent className="sm:max-w-[360px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Rename System</DialogTitle>
+          </DialogHeader>
+          <div className="py-3 space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">System Name</label>
+            <Input
+              autoFocus
+              type="text"
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRenameSave(); } }}
+              placeholder="e.g. Cardiology"
+              className="text-base py-5 px-4 bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background"
+            />
+          </div>
+          <DialogFooter className="flex-row gap-2 sm:justify-end mt-2">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowRenameDialog(false)}>Cancel</Button>
+            <Button className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleRenameSave} disabled={!renameValue.trim() || renameValue.trim() === system.name}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

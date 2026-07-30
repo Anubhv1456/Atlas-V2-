@@ -1,48 +1,82 @@
 import { StudySystem, SystemStatus } from './database';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
-// All values are in days. Adjust here to change global behaviour.
+// All values are in days. Adjust here to change global behavior.
 
 export const REVISION_CONFIG = {
   INITIAL_INTERVALS: {
-    Strong:  30,
-    Average: 14,
-    Weak:    7,
+    Strong:  25,
+    Average: 12,
+    Weak:    5,
   } as Record<SystemStatus, number>,
   MULTIPLIERS: {
-    Strong:  2.0,
-    Average: 1.5,
-    Weak:    0.5,
+    Strong:  2.50,
+    Average: 1.75,
+    Weak:    0.60, // Graceful stability adjustment on struggle
   } as Record<SystemStatus, number>,
-  MIN_INTERVAL: 3,
-  MAX_INTERVAL: 90,
+  CONFIDENCE_WEIGHTS: {
+    Weak:    1.60,
+    Average: 1.25,
+    Strong:  1.00,
+  } as Record<SystemStatus, number>,
+  TARGET_RETENTION_DUE: 0.90, // 90% target retrievability at interval due date
+  MIN_INTERVAL: 2,
+  MAX_INTERVAL: 180,
+  DEFAULT_DAILY_LIMIT: 5,
 } as const;
 
-// ── Core calculations ─────────────────────────────────────────────────────────
+export interface DecayPreset {
+  factor: number;
+  label: string;
+  icon: string;
+  badgeClass: string;
+  description: string;
+}
 
-/** Initial interval in days for a given confidence level. */
+export const DECAY_CALIBRATION_PRESETS: DecayPreset[] = [
+  { factor: 0.75, label: 'Slow Decay', icon: '🛡️', badgeClass: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-400', description: 'High conceptual retention / sticky memory (Decays ~25% slower)' },
+  { factor: 1.00, label: 'Standard', icon: '⚖️', badgeClass: 'text-muted-foreground bg-muted border-border', description: 'Default Ebbinghaus retention curve (1.0x baseline)' },
+  { factor: 1.25, label: 'Moderate Decay', icon: '⚡', badgeClass: 'text-amber-600 bg-amber-500/10 border-amber-500/20 dark:text-amber-400', description: 'Medium volatility / complex topic (Decays ~25% faster)' },
+  { factor: 1.50, label: 'Fast Decay', icon: '🔥', badgeClass: 'text-destructive bg-destructive/10 border-destructive/20', description: 'High volatility / dense facts (Decays ~50% faster)' },
+];
+
+/** Extract or default system decay factor. */
+export function getSystemDecayFactor(sys: StudySystem): number {
+  return typeof sys.decayFactor === 'number' && sys.decayFactor > 0 ? sys.decayFactor : 1.0;
+}
+
+// ── Core Calculations ─────────────────────────────────────────────────────────
+
+/** Initial interval in days for a given confidence level and decay factor. */
 export function getInitialInterval(confidence: SystemStatus): number {
-  return REVISION_CONFIG.INITIAL_INTERVALS[confidence];
+  return REVISION_CONFIG.INITIAL_INTERVALS[confidence] ?? 12;
 }
 
 /** Multiplier for a given confidence level. */
 export function getMultiplier(confidence: SystemStatus): number {
-  return REVISION_CONFIG.MULTIPLIERS[confidence];
+  return REVISION_CONFIG.MULTIPLIERS[confidence] ?? 1.5;
 }
 
 /**
- * Calculate the next interval after a completed revision.
- * newInterval = clamp(previousInterval × multiplier, MIN, MAX)
+ * Calculate the next memory stability interval after a completed revision.
+ * Adjusts for system-level memory decay factor.
  */
-export function calculateNextInterval(currentInterval: number, confidence: SystemStatus): number {
-  const raw = currentInterval * getMultiplier(confidence);
+export function calculateNextInterval(
+  currentInterval: number,
+  confidence: SystemStatus,
+  decayFactor: number = 1.0
+): number {
+  const multiplier = getMultiplier(confidence);
+  // Faster decay factors (>1.0) adjust multiplier conservatively; slower (<1.0) expand intervals further
+  const adjustedMultiplier = multiplier * (1 / Math.sqrt(decayFactor));
+  const raw = currentInterval * adjustedMultiplier;
   return Math.round(
-    Math.max(REVISION_CONFIG.MIN_INTERVAL, Math.min(REVISION_CONFIG.MAX_INTERVAL, raw)),
+    Math.max(REVISION_CONFIG.MIN_INTERVAL, Math.min(REVISION_CONFIG.MAX_INTERVAL, raw))
   );
 }
 
 /** Add `days` to a date, returning a new Date (time zeroed to midnight). */
-function addDays(base: Date, days: number): Date {
+export function addDays(base: Date, days: number): Date {
   const d = new Date(base);
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + days);
@@ -56,17 +90,76 @@ export function today(): Date {
   return d;
 }
 
+// ── Memory Retrievability Model ───────────────────────────────────────────────
+
+/**
+ * Calculate the estimated memory retrievability percentage R(t) in range [0, 100].
+ * Based on Target Retention Half-Life model: R(t) = 100 × (0.90)^(t / S)
+ * - At t = 0 (review day): R = 100%
+ * - At t = S (due date): R = 90%
+ * - At t = 2S (overdue): R = 81%
+ */
+export function getRetrievability(sys: StudySystem, now: Date = today()): number {
+  if (!hasRevisionScheduled(sys)) return 100;
+
+  const lastDate = sys.lastRevisionDate
+    ? new Date(sys.lastRevisionDate)
+    : sys.completionDate
+    ? new Date(sys.completionDate)
+    : sys.updatedAt
+    ? new Date(sys.updatedAt)
+    : now;
+
+  const stability = sys.currentRevisionInterval && sys.currentRevisionInterval > 0
+    ? sys.currentRevisionInterval
+    : getInitialInterval(sys.status);
+
+  const n = new Date(now);
+  n.setHours(0, 0, 0, 0);
+  const l = new Date(lastDate);
+  l.setHours(0, 0, 0, 0);
+
+  const daysElapsed = Math.max(0, Math.floor((n.getTime() - l.getTime()) / 86_400_000));
+  const decayFactor = getSystemDecayFactor(sys);
+  
+  // Formula: 100 * (0.90 ^ ((daysElapsed * decayFactor) / stability))
+  const retrievability = 100 * Math.pow(REVISION_CONFIG.TARGET_RETENTION_DUE, (daysElapsed * decayFactor) / stability);
+  return Math.min(100, Math.max(0, Math.round(retrievability * 10) / 10));
+}
+
+/** Categorize retrievability into human-readable recall health. */
+export function getRetrievabilityHealth(retrievability: number): {
+  label: string;
+  status: 'optimal' | 'moderate' | 'risk' | 'critical';
+  colorClass: string;
+} {
+  if (retrievability >= 90) {
+    return { label: 'Optimal Recall', status: 'optimal', colorClass: 'text-emerald-600 dark:text-emerald-400' };
+  } else if (retrievability >= 80) {
+    return { label: 'Moderate Decay', status: 'moderate', colorClass: 'text-amber-600 dark:text-amber-400' };
+  } else if (retrievability >= 70) {
+    return { label: 'High Risk', status: 'risk', colorClass: 'text-orange-600 dark:text-orange-400' };
+  } else {
+    return { label: 'Memory Reset', status: 'critical', colorClass: 'text-destructive' };
+  }
+}
+
 // ── Scheduling ────────────────────────────────────────────────────────────────
 
 /**
  * Schedule the FIRST revision after initial evaluation.
  * Returns the fields that should be written to the system.
  */
-export function scheduleFirstRevision(confidence: SystemStatus, now: Date = today()): {
+export function scheduleFirstRevision(
+  confidence: SystemStatus,
+  now: Date = today(),
+  decayFactor: number = 1.0,
+): {
   currentRevisionInterval: number;
   nextRevisionDate: Date;
 } {
-  const interval = getInitialInterval(confidence);
+  const baseInterval = getInitialInterval(confidence);
+  const interval = Math.max(REVISION_CONFIG.MIN_INTERVAL, Math.round(baseInterval * (1 / Math.sqrt(decayFactor))));
   return {
     currentRevisionInterval: interval,
     nextRevisionDate: addDays(now, interval),
@@ -81,18 +174,19 @@ export function scheduleNextRevision(
   confidence: SystemStatus,
   currentInterval: number,
   now: Date = today(),
+  decayFactor: number = 1.0,
 ): {
   currentRevisionInterval: number;
   nextRevisionDate: Date;
 } {
-  const interval = calculateNextInterval(currentInterval, confidence);
+  const interval = calculateNextInterval(currentInterval, confidence, decayFactor);
   return {
     currentRevisionInterval: interval,
     nextRevisionDate: addDays(now, interval),
   };
 }
 
-// ── State queries ─────────────────────────────────────────────────────────────
+// ── State Queries & Prioritization ────────────────────────────────────────────
 
 /** True when a system has an initial completion and a scheduled revision. */
 export function hasRevisionScheduled(sys: StudySystem): boolean {
@@ -136,18 +230,23 @@ export function daysOverdue(sys: StudySystem, now: Date = today()): number {
 
 /** Calculate Knowledge Decay / Debt score for prioritizing revision queue. */
 export function calculateDecayScore(sys: StudySystem, now: Date = today()): number {
+  if (!hasRevisionScheduled(sys)) return 0;
+  
+  const retrievability = getRetrievability(sys, now);
+  const memoryLoss = 100 - retrievability;
+  const weight = REVISION_CONFIG.CONFIDENCE_WEIGHTS[sys.status] ?? 1.0;
+  const decayFactor = getSystemDecayFactor(sys);
   const overdue = daysOverdue(sys, now);
-  // Weight: Weak = 3, Average = 2, Strong = 1
-  const confidenceWeight = sys.status === 'Weak' ? 3 : sys.status === 'Average' ? 2 : 1;
-  if (overdue > 0) {
-    return (overdue + 1) * confidenceWeight;
-  } else if (isRevisionDue(sys, now)) {
-    return 0.5 * confidenceWeight;
+
+  if (isRevisionDue(sys, now)) {
+    return Math.round((memoryLoss * weight * decayFactor + overdue * 2) * 10) / 10;
+  } else {
+    // Small background decay score for upcoming
+    return Math.round((memoryLoss * 0.1 * weight * decayFactor) * 10) / 10;
   }
-  return 0;
 }
 
-/** Sort systems strictly by revision debt priority (highest decay score first, then earliest next revision date). */
+/** Sort systems strictly by revision decay priority (highest decay score first). */
 export function sortSystemsByRevisionPriority(systems: StudySystem[], now: Date = today()): StudySystem[] {
   return [...systems].sort((a, b) => {
     const scoreA = calculateDecayScore(a, now);
@@ -168,3 +267,36 @@ export function isRevisionUpcoming(sys: StudySystem, now: Date = today()): boole
   n.setHours(0, 0, 0, 0);
   return due > n;
 }
+
+// ── Backlog Protection & Catch-Up Queue ─────────────────────────────────────
+
+export interface RevisionQueueResult {
+  priorityQueue: StudySystem[];
+  backlogBuffer: StudySystem[];
+  totalDueCount: number;
+  overflowCount: number;
+}
+
+/**
+ * Get daily revision queue with backlog protection cap.
+ * Prevents overwhelm when returning from missed study days.
+ */
+export function getDailyRevisionQueue(
+  systems: StudySystem[],
+  maxDailyLimit: number = REVISION_CONFIG.DEFAULT_DAILY_LIMIT,
+  now: Date = today()
+): RevisionQueueResult {
+  const allDue = systems.filter(sys => isRevisionDue(sys, now));
+  const sorted = sortSystemsByRevisionPriority(allDue, now);
+
+  const priorityQueue = sorted.slice(0, maxDailyLimit);
+  const backlogBuffer = sorted.slice(maxDailyLimit);
+
+  return {
+    priorityQueue,
+    backlogBuffer,
+    totalDueCount: sorted.length,
+    overflowCount: backlogBuffer.length,
+  };
+}
+

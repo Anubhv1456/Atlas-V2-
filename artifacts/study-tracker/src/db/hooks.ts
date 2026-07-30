@@ -320,8 +320,10 @@ export async function recordInitialEvaluation(
   systemId: number,
   confidence: SystemStatus,
 ) {
+  const sys = await db.systems.get(systemId);
+  const decayFactor = sys?.decayFactor ?? 1.0;
   const now = today();
-  const { currentRevisionInterval, nextRevisionDate } = scheduleFirstRevision(confidence, now);
+  const { currentRevisionInterval, nextRevisionDate } = scheduleFirstRevision(confidence, now, decayFactor);
   await updateSystem(systemId, {
     status: confidence,
     completionDate: new Date(),
@@ -333,8 +335,8 @@ export async function recordInitialEvaluation(
   });
 
   const formattedDate = format(nextRevisionDate, 'MMM d, yyyy');
-  toast.success('Recall Engine Initialized', {
-    description: `Confidence: ${confidence} • First review scheduled in ${currentRevisionInterval} days (${formattedDate})`,
+  toast.success('Spaced Recall Engine Active', {
+    description: `Confidence: ${confidence} • First recall scheduled in ${currentRevisionInterval} days (${formattedDate})`,
   });
 }
 
@@ -354,8 +356,9 @@ export async function completeRevision(
   if (!sys) return;
 
   const now = today();
-  const previousInterval = sys.currentRevisionInterval ?? 14;
-  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(confidence, previousInterval, now);
+  const previousInterval = sys.currentRevisionInterval ?? 12;
+  const decayFactor = sys.decayFactor ?? 1.0;
+  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(confidence, previousInterval, now, decayFactor);
 
   await updateSystem(systemId, {
     status: confidence,
@@ -376,11 +379,11 @@ export async function completeRevision(
   });
 
   const delta = currentRevisionInterval - previousInterval;
-  const deltaStr = delta >= 0 ? `+${delta}d extension` : `${delta}d adjusted`;
+  const deltaStr = delta >= 0 ? `+${delta}d stability` : `${delta}d adjusted`;
   const formattedDate = format(nextRevisionDate, 'MMM d, yyyy');
 
-  toast.success(`Revision Logged: ${systemName}`, {
-    description: `Interval: ${previousInterval}d → ${currentRevisionInterval}d (${deltaStr}) • Next recall on ${formattedDate}`,
+  toast.success(`Recall Pass Logged: ${systemName}`, {
+    description: `Stability: ${previousInterval}d → ${currentRevisionInterval}d (${deltaStr}) • Target 90% Recall due ${formattedDate}`,
   });
 }
 
