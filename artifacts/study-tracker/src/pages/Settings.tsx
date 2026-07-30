@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, ExternalLink, Copy, Check, FolderTree, FileText, Layers, Info } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { AnkiLogo, AnkiBadge } from '@/components/AnkiLogo';
-import { getAnkiConfig, saveAnkiConfig, launchAnkiDeck, getAnkiSubjectDeckList } from '@/lib/anki';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -67,58 +64,6 @@ export default function Settings() {
   const [autoBackupEnabled, setAutoBackupEnabledState] = useState<boolean>(true);
   const [autoSnapshots, setAutoSnapshots] = useState<AutoSnapshot[]>([]);
   const [snapshotToRestore, setSnapshotToRestore] = useState<AutoSnapshot | null>(null);
-
-  // Anki settings state
-  const [ankiConfig, setAnkiConfigState] = useState(() => getAnkiConfig());
-  const [showAnkiDeckGuideDialog, setShowAnkiDeckGuideDialog] = useState(false);
-  const [ankiDeckGuideData, setAnkiDeckGuideData] = useState<{
-    deckList: string[];
-    deckCount: number;
-  } | null>(null);
-  const [copiedAnkiList, setCopiedAnkiList] = useState(false);
-
-  const handleUpdateAnkiRoot = (val: string) => {
-    const updated = saveAnkiConfig({ rootDeckName: val });
-    setAnkiConfigState(updated);
-  };
-
-  const handleToggleAnkiReminders = (enabled: boolean) => {
-    const updated = saveAnkiConfig({ promptReminders: enabled });
-    setAnkiConfigState(updated);
-  };
-
-  const handleResetAnkiDecks = () => {
-    const updated = saveAnkiConfig({ confirmedDecks: {} });
-    setAnkiConfigState(updated);
-    toast({ title: 'Anki Decks Reset', description: 'All deck verifications have been cleared.' });
-  };
-
-  const handleOpenAnkiDeckGuide = async () => {
-    try {
-      const data = await getAnkiSubjectDeckList();
-      setAnkiDeckGuideData(data);
-      setShowAnkiDeckGuideDialog(true);
-    } catch (e: any) {
-      console.error('Failed to get subject deck list:', e);
-      toast({
-        title: 'Error Loading Deck List',
-        description: e?.message || 'Could not fetch subjects for deck guide.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleCopyAnkiList = () => {
-    if (!ankiDeckGuideData) return;
-    const textToCopy = ankiDeckGuideData.deckList.join('\n');
-    navigator.clipboard.writeText(textToCopy);
-    setCopiedAnkiList(true);
-    toast({
-      title: 'Copied to Clipboard! 📋',
-      description: 'Copied all subject deck names to clipboard.',
-    });
-    setTimeout(() => setCopiedAnkiList(false), 2000);
-  };
 
 
   useEffect(() => {
@@ -561,107 +506,6 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* ── Anki Integration ─────────────────────────────────────────────── */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Anki Integration</h2>
-          <div className="bg-card rounded-2xl border shadow-sm p-4 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl shrink-0">
-                <AnkiLogo className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-foreground text-sm">Subject Decks & System Tags</h3>
-                  <Badge variant="secondary" className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none font-semibold">Clean Architecture</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Atlas creates <strong>1 deck per subject</strong> (e.g., <code className="bg-muted px-1 rounded font-mono">Medicine</code>). System topics use <code className="bg-muted px-1 rounded font-mono">Subject::System</code> tags for targeted 1-click review.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-2 border-t border-border/50">
-              <label className="text-xs font-medium text-foreground flex items-center justify-between">
-                <span>Master Deck Prefix (Optional)</span>
-                <span className="text-[11px] text-muted-foreground font-normal">Leave blank for direct <code className="bg-muted px-1 rounded font-mono">Subject</code></span>
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  value={ankiConfig.rootDeckName}
-                  onChange={(e) => handleUpdateAnkiRoot(e.target.value)}
-                  placeholder="e.g. 'NEETPG' (or leave blank)"
-                  className="rounded-xl bg-muted/40 text-sm h-10"
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground font-mono">
-                Active Subject Deck Path: {ankiConfig.rootDeckName ? `${ankiConfig.rootDeckName}::Subject` : 'Subject'}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-border/50">
-              <div>
-                <div className="font-medium text-xs text-foreground">Post-Task Flashcard Prompt</div>
-                <div className="text-[11px] text-muted-foreground">Show 1-click Anki reminder with filtered search query after QBank/Revision</div>
-              </div>
-              <Switch
-                checked={ankiConfig.promptReminders}
-                onCheckedChange={handleToggleAnkiReminders}
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-border/50">
-              <div>
-                <div className="font-medium text-xs text-foreground">Verified Subject Decks</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {Object.keys(ankiConfig.confirmedDecks || {}).length} subject/system link(s) setup
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => launchAnkiDeck(ankiConfig.rootDeckName || 'Atlas')}
-                  className="rounded-xl text-xs h-8 font-semibold"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open Anki
-                </Button>
-                {Object.keys(ankiConfig.confirmedDecks || {}).length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleResetAnkiDecks}
-                    className="rounded-xl text-xs h-8 text-destructive hover:bg-destructive/10"
-                  >
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Manual Deck List & Setup Guide Action */}
-            <div className="pt-3 border-t border-border/50">
-              <div className="flex items-center justify-between">
-                <div className="pr-2">
-                  <div className="font-medium text-xs text-foreground flex items-center gap-1.5">
-                    <FolderTree className="w-4 h-4 text-blue-500" />
-                    <span>Manual Deck Setup & Subject List</span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                    View your subject deck names to create in Anki and see how card tags (<code className="bg-muted px-1 rounded font-mono">Subject::System</code>) work for 1-click launch.
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handleOpenAnkiDeckGuide}
-                  className="rounded-xl text-xs h-8 font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shrink-0"
-                >
-                  <FolderTree className="w-3.5 h-3.5" /> View Deck List & Guide
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Backup */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Backup</h2>
@@ -849,111 +693,6 @@ export default function Settings() {
             </Button>
             <Button className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleConfirmRestoreSnapshot}>
               Restore Data
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Manual Anki Deck Setup & Subject List Dialog ────────────────────── */}
-      <Dialog open={showAnkiDeckGuideDialog} onOpenChange={setShowAnkiDeckGuideDialog}>
-        <DialogContent className="sm:max-w-[540px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[88vh] flex flex-col">
-          <DialogHeader>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-                <FolderTree className="w-5 h-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-semibold">Manual Anki Deck Setup Guide</DialogTitle>
-                <DialogDescription className="text-xs">
-                  Create subject decks manually in Anki and tag cards for seamless 1-click launch from Atlas.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          {ankiDeckGuideData && (
-            <div className="space-y-3.5 my-2 overflow-y-auto pr-1">
-              <div className="bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-1">
-                <div className="flex justify-between items-center text-muted-foreground font-medium">
-                  <span>Subject Decks Count:</span>
-                  <Badge variant="secondary" className="font-mono">{ankiDeckGuideData.deckCount} Decks</Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Atlas uses <strong>1 deck per subject</strong> (e.g. <code className="bg-muted px-1 rounded font-mono">Medicine</code>) and filters systems via <code className="bg-muted px-1 rounded font-mono">Subject::System</code> tags.
-                </p>
-              </div>
-
-              {/* Subject Deck List Box */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-foreground">Exact Subject Deck Names to Create in Anki:</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleCopyAnkiList}
-                    className="h-6 px-2 text-[11px] font-medium hover:bg-muted"
-                  >
-                    {copiedAnkiList ? <Check className="w-3 h-3 text-emerald-500 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                    {copiedAnkiList ? 'Copied All' : 'Copy All'}
-                  </Button>
-                </div>
-                <div className="bg-black/90 text-emerald-400 font-mono text-[11px] p-3 rounded-xl max-h-40 overflow-y-auto space-y-1 border border-border/50 select-all">
-                  {ankiDeckGuideData.deckList.map((deck, idx) => (
-                    <div key={idx} className="truncate flex items-center gap-1.5">
-                      <span className="text-emerald-600 dark:text-emerald-500/60 select-none">&bull;</span>
-                      <span>{deck}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 3 Step Manual Instructions */}
-              <div className="bg-muted/30 border border-border/60 rounded-xl p-3 text-xs space-y-2.5">
-                <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
-                  <Info className="w-3.5 h-3.5 text-blue-500" />
-                  <span>3 Simple Steps for Manual Setup:</span>
-                </div>
-
-                <ol className="list-decimal list-inside space-y-2 text-[11px] text-foreground leading-relaxed">
-                  <li className="p-2 rounded-lg bg-background/80 border border-border/50">
-                    <strong className="text-foreground">Step 1: Create Subject Decks in Anki</strong>
-                    <p className="text-muted-foreground text-[10.5px] mt-0.5">
-                      In Anki or AnkiDroid, create a deck for each subject using the exact names listed above (e.g., <code className="bg-muted px-1 rounded font-mono">Medicine</code> or <code className="bg-muted px-1 rounded font-mono">NEETPG::Medicine</code>).
-                    </p>
-                  </li>
-                  <li className="p-2 rounded-lg bg-background/80 border border-border/50">
-                    <strong className="text-foreground">Step 2: Tag Your Cards by System</strong>
-                    <p className="text-muted-foreground text-[10.5px] mt-0.5">
-                      When adding flashcards into a subject deck, tag them as <code className="bg-muted px-1 rounded font-mono">&lt;Subject&gt;::&lt;System&gt;</code> (e.g., <code className="bg-muted px-1 rounded font-mono">Medicine::Cardiology</code>).
-                    </p>
-                  </li>
-                  <li className="p-2 rounded-lg bg-background/80 border border-border/50">
-                    <strong className="text-foreground">Step 3: 1-Click Launch from Atlas</strong>
-                    <p className="text-muted-foreground text-[10.5px] mt-0.5">
-                      Tap any system or subject in Atlas to launch Anki directly filtered to that specific deck and tag query!
-                    </p>
-                  </li>
-                </ol>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="flex justify-end gap-2 mt-2 pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyAnkiList}
-              className="rounded-xl text-xs h-9 font-medium gap-1.5"
-            >
-              {copiedAnkiList ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedAnkiList ? 'Copied!' : 'Copy Deck Names'}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setShowAnkiDeckGuideDialog(false)}
-              className="rounded-xl text-xs h-9 font-semibold bg-blue-600 hover:bg-blue-700 text-white px-5"
-            >
-              Done
             </Button>
           </DialogFooter>
         </DialogContent>
