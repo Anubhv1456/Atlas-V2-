@@ -1,21 +1,14 @@
-import { db } from '@/db/database';
-
-// ── Anki Integration Utilities & Helpers (v1 Architecture) ──────────────────
+// ── Anki Integration Utilities & Helpers ──────────────────────────────────
 //
 // DESIGN PHILOSOPHY:
 // 1. Deck Structure: One deck per subject ONLY (e.g., "Medicine" or "NEET PG::Medicine").
-//    NO system subdecks. NO topic subdecks. NO duplicate decks.
 // 2. Tags: Fully qualified tags formatted as `<Subject>::<System>` (e.g., `Medicine::Cardiology`).
-// 3. Atlas Responsibilities: Syllabus hierarchy, study progress, notes, qbank, weak/strong analysis, revision.
-// 4. Anki Responsibilities: Flashcard review engine, FSRS/SM-2 scheduling, review history.
-// 5. Review Launch: Tapping a system opens Anki filtered to `deck:"<SubjectDeck>" tag:"<Subject>::<System>"`.
+// 3. Review Launch: Tapping Go opens Anki filtered to `deck:"<SubjectDeck>" tag:"<Subject>::<System>"`.
 
 export interface AnkiConfig {
   rootDeck: string; // e.g. "" or "NEET PG"
   rootDeckName?: string; // alias
   separator: string; // e.g. "::"
-  autoPromptAfterTask: boolean; // whether to suggest Anki after QBank/Revision
-  promptReminders?: boolean; // alias
   confirmedDecks: Record<string, boolean>; // key: `${subjectName}` or `${subjectName}::${systemName}`
   customDeckUrls: Record<string, string>; // optional custom URL overrides
   globalAnkiConfirmed: boolean; // if true, all decks enabled globally
@@ -27,8 +20,6 @@ export const DEFAULT_ANKI_CONFIG: AnkiConfig = {
   rootDeck: 'NEETPG',
   rootDeckName: 'NEETPG',
   separator: '::',
-  autoPromptAfterTask: true,
-  promptReminders: true,
   confirmedDecks: {},
   customDeckUrls: {},
   globalAnkiConfirmed: false,
@@ -40,14 +31,11 @@ export function getAnkiConfig(): AnkiConfig {
     if (!raw) return DEFAULT_ANKI_CONFIG;
     const parsed = JSON.parse(raw);
     const root = parsed.rootDeck ?? parsed.rootDeckName ?? 'NEETPG';
-    const prompt = parsed.autoPromptAfterTask ?? parsed.promptReminders ?? true;
     return {
       ...DEFAULT_ANKI_CONFIG,
       ...parsed,
       rootDeck: root,
       rootDeckName: root,
-      autoPromptAfterTask: prompt,
-      promptReminders: prompt,
     };
   } catch (e) {
     console.error('Failed to parse Anki config:', e);
@@ -58,15 +46,12 @@ export function getAnkiConfig(): AnkiConfig {
 export function saveAnkiConfig(config: Partial<AnkiConfig>): AnkiConfig {
   const current = getAnkiConfig();
   const root = config.rootDeck ?? config.rootDeckName ?? current.rootDeck;
-  const prompt = config.autoPromptAfterTask ?? config.promptReminders ?? current.autoPromptAfterTask;
 
   const updated: AnkiConfig = {
     ...current,
     ...config,
     rootDeck: root,
     rootDeckName: root,
-    autoPromptAfterTask: prompt,
-    promptReminders: prompt,
   };
 
   try {
@@ -133,17 +118,6 @@ export function formatAnkiSearchQuery(subjectName: string, systemName?: string, 
   }
   const tag = formatSystemTag(subjectName, systemName);
   return `deck:"${deck}" tag:"${tag}"`;
-}
-
-/**
- * Checks whether a deck has been confirmed/verified by the user.
- */
-export function isDeckConfirmed(subjectName: string, systemName?: string): boolean {
-  const config = getAnkiConfig();
-  if (config.globalAnkiConfirmed) return true;
-
-  const key = systemName ? `${subjectName}::${systemName}` : subjectName;
-  return Boolean(config.confirmedDecks[key] || config.confirmedDecks[subjectName]);
 }
 
 /**
@@ -277,36 +251,6 @@ export function toggleDailyAnkiPass(dateStr?: string): DailyAnkiPassState {
     console.error('Failed to save Daily Anki Pass:', e);
   }
   return updated;
-}
-
-// ── Subject-Only Anki Deck Hierarchy Helper (Manual Deck List) ───────────────
-
-export async function getAnkiSubjectDeckList(customRoot?: string): Promise<{
-  deckList: string[];
-  deckCount: number;
-}> {
-  const rawSubjects = await db.subjects.toArray();
-  const subjects = [...rawSubjects].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
-
-  const config = getAnkiConfig();
-  const root = customRoot !== undefined ? customRoot : (config.rootDeckName?.trim() || config.rootDeck?.trim() || '');
-
-  const deckList: string[] = [];
-
-  // 1. Add Master Root Deck if specified
-  if (root && !deckList.includes(root)) {
-    deckList.push(root);
-  }
-
-  // 2. Add Subject-Level Decks
-  subjects.forEach(subject => {
-    const subjectDeck = formatDeckName(subject.name, undefined, root);
-    if (subjectDeck && !deckList.includes(subjectDeck)) {
-      deckList.push(subjectDeck);
-    }
-  });
-
-  return { deckList, deckCount: deckList.length };
 }
 
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AnkiLogo } from './AnkiLogo';
-import { formatDeckName, formatAnkiSearchQuery, formatSystemTag, setDeckConfirmed, setSubjectDecksConfirmed, launchAnkiDeck, isDeckConfirmed, saveAnkiConfig, getAnkiConfig } from '@/lib/anki';
+import { formatDeckName, formatAnkiSearchQuery, formatSystemTag, setDeckConfirmed, setSubjectDecksConfirmed, launchAnkiDeck, saveAnkiConfig, getAnkiConfig } from '@/lib/anki';
 import { Copy, Check, ExternalLink, FolderPlus, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
