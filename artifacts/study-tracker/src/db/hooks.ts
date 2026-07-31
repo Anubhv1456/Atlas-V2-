@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Subject, StudySystem, HistoryEntry, PYQYear } from './database';
 import { SystemStatus } from './database';
-import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today, sortSystemsByRevisionPriority } from './revisionEngine';
+import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today, sortSystemsByRevisionPriority, calculateDurationMultiplier, getActiveRevisionSystems } from './revisionEngine';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -54,6 +54,11 @@ export function useRevisionsDue(): StudySystem[] {
   const systems = useLiveQuery(() => db.systems.toArray()) ?? [];
   const now = today();
   return systems.filter(s => isRevisionDue(s, now));
+}
+
+/** Systems currently in active multi-day revision. */
+export function useActiveRevisions(): StudySystem[] {
+  return useLiveQuery(() => db.systems.where('revisionState').equals('in_progress').toArray()) ?? [];
 }
 
 /** All PYQ years for a specific subject, ordered by year label. */
@@ -340,10 +345,83 @@ export async function recordInitialEvaluation(
   });
 }
 
+// ── Multi-Day Active Revision Actions ────────────────────────────────────────
+
+/** Toggle whether a system is flagged as a Lengthy / Multi-Day topic. */
+export async function toggleSystemLengthy(systemId: number, isLengthy: boolean) {
+  await updateSystem(systemId, { isLengthy });
+  toast.success(isLengthy ? 'Flagged as Lengthy Topic 📚' : 'Topic Duration Flag Reset', {
+    description: isLengthy
+      ? 'This topic is designated for multi-day active revisions.'
+      : 'Topic marked for standard single-pass revisions.',
+  });
+}
+
 /**
- * Mark a revision as completed.
+ * Start active multi-day revision for a system.
+ * Sets revisionState to 'in_progress', logs day 1 check-in, and sets as secondary focus.
+ */
+export async function startActiveRevision(systemId: number, initialProgressPct = 15) {
+  const sys = await db.systems.get(systemId);
+  if (!sys) return;
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const changes: Partial<StudySystem> = {
+    revisionState: 'in_progress',
+    revisionStartedAt: new Date(),
+    revisionDaysLogged: 1,
+    revisionLastCheckInDate: todayStr,
+    revisionProgressPercent: initialProgressPct,
+  };
+
+  // If focus is null, auto-set as secondary focus so it remains visible
+  if (!sys.focus) {
+    changes.focus = 'secondary';
+  }
+
+  await updateSystem(systemId, changes);
+
+  toast.success(`Started Active Revision: ${sys.name} ⏳`, {
+    description: 'Day 1 logged. Other scheduled revisions are now paused until you complete this topic.',
+  });
+}
+
+/**
+ * Log a daily study check-in for an active multi-day revision.
+ * Increments days logged if not already checked in today, and updates progress %.
+ */
+export async function logDailyRevisionCheckIn(systemId: number, progressPct?: number) {
+  const sys = await db.systems.get(systemId);
+  if (!sys || sys.revisionState !== 'in_progress') return;
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const alreadyCheckedInToday = sys.revisionLastCheckInDate === todayStr;
+
+  const daysLogged = alreadyCheckedInToday
+    ? (sys.revisionDaysLogged || 1)
+    : (sys.revisionDaysLogged || 1) + 1;
+
+  const newProgressPct = progressPct !== undefined
+    ? Math.max(0, Math.min(100, progressPct))
+    : Math.min(95, (sys.revisionProgressPercent || 0) + 20);
+
+  await updateSystem(systemId, {
+    revisionDaysLogged: daysLogged,
+    revisionLastCheckInDate: todayStr,
+    revisionProgressPercent: newProgressPct,
+  });
+
+  toast.success(`Daily Study Logged: ${sys.name} (Day ${daysLogged})`, {
+    description: alreadyCheckedInToday
+      ? `Progress updated to ${newProgressPct}%!`
+      : `Day ${daysLogged} check-in recorded • Progress: ${newProgressPct}%`,
+  });
+}
+
+/**
+ * Mark a revision as completed (supports multi-day active revisions).
  * Increments revisionCount, updates confidence + lastRevisionDate,
- * calculates and schedules the next revision, logs a history entry.
+ * calculates duration multiplier based on days logged, schedules next revision, logs history.
  */
 export async function completeRevision(
   systemId: number,
@@ -358,7 +436,21 @@ export async function completeRevision(
   const now = today();
   const previousInterval = sys.currentRevisionInterval ?? 12;
   const decayFactor = sys.decayFactor ?? 1.0;
-  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(confidence, previousInterval, now, decayFactor);
+
+  // Compute multi-day duration calibration multiplier
+  const daysTaken = sys.revisionState === 'in_progress'
+    ? Math.max(1, sys.revisionDaysLogged || Math.ceil((now.getTime() - new Date(sys.revisionStartedAt || now).getTime()) / 86_400_000) + 1)
+    : 1;
+
+  const durationMultiplier = calculateDurationMultiplier(daysTaken);
+
+  const { currentRevisionInterval, nextRevisionDate } = scheduleNextRevision(
+    confidence,
+    previousInterval,
+    now,
+    decayFactor,
+    durationMultiplier
+  );
 
   await updateSystem(systemId, {
     status: confidence,
@@ -366,6 +458,9 @@ export async function completeRevision(
     lastRevisionDate: new Date(),
     currentRevisionInterval,
     nextRevisionDate,
+    revisionState: 'completed',
+    revisionStartedAt: null,
+    revisionProgressPercent: 100,
   });
 
   await logCompletion({
@@ -374,16 +469,17 @@ export async function completeRevision(
     systemId,
     systemName,
     taskKey: 'revision',
-    taskLabel: 'Revision',
+    taskLabel: daysTaken > 1 ? `Revision (${daysTaken} days)` : 'Revision',
     completedAt: new Date(),
   });
 
   const delta = currentRevisionInterval - previousInterval;
   const deltaStr = delta >= 0 ? `+${delta}d stability` : `${delta}d adjusted`;
   const formattedDate = format(nextRevisionDate, 'MMM d, yyyy');
+  const durationNote = durationMultiplier > 1.0 ? ` (${daysTaken} days studied → ${Math.round((durationMultiplier - 1) * 100)}% interval boost)` : '';
 
-  toast.success(`Recall Pass Logged: ${systemName}`, {
-    description: `Stability: ${previousInterval}d → ${currentRevisionInterval}d (${deltaStr}) • Target 90% Recall due ${formattedDate}`,
+  toast.success(`Revision Completed: ${systemName} 🎉`, {
+    description: `Stability: ${previousInterval}d → ${currentRevisionInterval}d (${deltaStr})${durationNote} • Target 90% Recall due ${formattedDate}`,
   });
 }
 

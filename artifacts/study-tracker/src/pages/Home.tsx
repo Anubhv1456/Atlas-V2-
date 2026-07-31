@@ -195,7 +195,13 @@ export default function Home() {
   let isSecondaryOverriddenByRevision = false;
   let isAutoSecondary = false;
 
-  if (dueRevisions.length > 0) {
+  const activeMultiDaySystem = systems.find(s => s.revisionState === 'in_progress');
+
+  if (activeMultiDaySystem) {
+    secondaryFocus = activeMultiDaySystem;
+    isSecondaryOverriddenByRevision = true;
+    isAutoSecondary = false;
+  } else if (dueRevisions.length > 0) {
     // Active revisions override secondary focus and suspend custom selection until completed
     secondaryFocus = dueRevisions[0];
     isSecondaryOverriddenByRevision = true;
@@ -661,18 +667,28 @@ export default function Home() {
                 </div>
 
                 {/* Secondary Focus */}
-                <div className="bg-card rounded-2xl border border-amber-500/20 shadow-sm overflow-hidden relative flex flex-col justify-between">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/80" />
+                <div className={cn(
+                  "bg-card rounded-2xl border shadow-sm overflow-hidden relative flex flex-col justify-between",
+                  secondaryFocus?.revisionState === 'in_progress' ? "border-sky-500/40" : "border-amber-500/20"
+                )}>
+                  <div className={cn(
+                    "absolute top-0 left-0 w-full h-1",
+                    secondaryFocus?.revisionState === 'in_progress' ? "bg-sky-500" : "bg-amber-500/80"
+                  )} />
 
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-2 gap-1">
-                      <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 truncate">
-                        {isSecondaryOverriddenByRevision ? (
-                          <Clock className="w-3 h-3 shrink-0" />
+                      <p className={cn(
+                        "text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5 truncate",
+                        secondaryFocus?.revisionState === 'in_progress' ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400"
+                      )}>
+                        {secondaryFocus?.revisionState === 'in_progress' ? (
+                          <><Clock className="w-3 h-3 shrink-0 text-sky-500" /> Active Multi-Day Revision</>
+                        ) : isSecondaryOverriddenByRevision ? (
+                          <><Clock className="w-3 h-3 shrink-0" /> Secondary Focus</>
                         ) : (
-                          <Target className="w-3 h-3 shrink-0" />
+                          <><Target className="w-3 h-3 shrink-0" /> Secondary Focus</>
                         )}
-                        Secondary Focus
                       </p>
 
                       {secondaryFocus && (
@@ -709,11 +725,15 @@ export default function Home() {
                           <p className="font-medium text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors line-clamp-2 text-sm leading-snug">
                             {secondaryFocus.name}
                           </p>
-                          {isSecondaryOverriddenByRevision && (
+                          {secondaryFocus.revisionState === 'in_progress' ? (
+                            <span className="shrink-0 text-[9px] bg-sky-500/15 text-sky-700 dark:text-sky-400 px-1.5 py-0.5 rounded-md font-semibold border border-sky-500/30">
+                              Day {secondaryFocus.revisionDaysLogged || 1} • {secondaryFocus.revisionProgressPercent || 0}%
+                            </span>
+                          ) : isSecondaryOverriddenByRevision ? (
                             <span className="shrink-0 text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-semibold border border-amber-500/20">
                               {secondaryDaysOverdue > 0 ? `Overdue ${secondaryDaysOverdue}d` : 'Revision Due'}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         <p className="text-[10px] text-muted-foreground mt-1 truncate">
                           {subjects.find(s => s.id === secondaryFocus.subjectId)?.name}

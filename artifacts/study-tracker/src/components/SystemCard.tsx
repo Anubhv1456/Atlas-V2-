@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { StudySystem, SystemStatus } from '@/db/database';
-import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, completeRevision } from '@/db/hooks';
+import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, completeRevision, startActiveRevision, logDailyRevisionCheckIn, toggleSystemLengthy } from '@/db/hooks';
 import { ProgressBar } from './ProgressBar';
 import { ConfidenceDialog } from './ConfidenceDialog';
 import { ScoreLogModal } from './ScoreLogModal';
-import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award, Sliders, MoreVertical, Edit2 } from 'lucide-react';
+import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award, Sliders, MoreVertical, Edit2, BookOpen, Calendar, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -261,8 +261,30 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
         revisionDue && !revisionOverdue && 'border-amber-500/25',
         highlighted && 'ring-1 ring-primary ring-offset-2 ring-offset-background',
       )}>
-        {/* Revision due banner */}
-        {revisionDue && (
+        {/* Active Revision Banner */}
+        {system.revisionState === 'in_progress' && (
+          <div className="bg-sky-500/10 border-b border-sky-500/20 text-sky-600 dark:text-sky-400 px-4 py-2.5 text-xs font-medium flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+              </span>
+              <span className="font-semibold uppercase tracking-wider text-[11px]">Active Multi-Day Revision</span>
+              <span className="text-muted-foreground">• Day {system.revisionDaysLogged || 1}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 rounded-md font-mono font-bold">
+                {system.revisionProgressPercent || 0}% Done
+              </span>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                Queue Paused
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Revision due banner (if not active in progress) */}
+        {revisionDue && system.revisionState !== 'in_progress' && (
           <div className={cn(
             'flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider',
             revisionOverdue
@@ -311,6 +333,11 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                     Secondary Focus
                   </span>
                 )}
+                {system.isLengthy && (
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 whitespace-nowrap shrink-0 flex items-center gap-1">
+                    <BookOpen className="w-3 h-3" /> Lengthy Topic
+                  </span>
+                )}
                 {getSystemDecayFactor(system) !== 1.0 && (
                   <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-semibold border whitespace-nowrap shrink-0',
                     getSystemDecayFactor(system) > 1.0 ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -334,6 +361,16 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                   <MoreVertical className="w-4 h-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSystemLengthy(system.id!, !system.isLengthy);
+                    }}
+                    className="gap-2 py-2 cursor-pointer text-xs font-medium"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-sky-500" />
+                    {system.isLengthy ? 'Unmark as Lengthy' : 'Mark as Lengthy Topic'}
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
@@ -529,17 +566,101 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
                       highlight={revisionDue}
                       highlightClass={revisionOverdue ? 'text-destructive font-semibold' : 'text-amber-500 dark:text-amber-400 font-semibold'}
                     />
-                    {revisionDue && (
-                      <div className="pt-2">
+                    {/* Multi-Day Active Revision Controls */}
+                    {system.revisionState === 'in_progress' ? (
+                      <div className="pt-3 pb-1 border-t border-border/60 space-y-3">
+                        <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3.5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-sky-500" />
+                              <span className="text-xs font-bold text-foreground">
+                                Active Multi-Day Revision (Day {system.revisionDaysLogged || 1})
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold bg-sky-500/20 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full">
+                              {system.revisionProgressPercent || 0}% Progress
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[11px] text-muted-foreground">
+                              <span>Study Progress</span>
+                              <span>{system.revisionProgressPercent || 0}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-sky-500 transition-all duration-300"
+                                style={{ width: `${system.revisionProgressPercent || 0}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between gap-1 pt-1">
+                              {[25, 50, 75, 100].map(pct => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => logDailyRevisionCheckIn(system.id!, pct)}
+                                  className={cn(
+                                    'flex-1 py-1 text-[10px] font-semibold rounded-md border transition-all',
+                                    (system.revisionProgressPercent || 0) >= pct
+                                      ? 'bg-sky-500/15 border-sky-500/30 text-sky-600 dark:text-sky-400'
+                                      : 'bg-background border-border text-muted-foreground hover:bg-muted'
+                                  )}
+                                >
+                                  {pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={system.revisionLastCheckInDate === format(new Date(), 'yyyy-MM-dd')}
+                              onClick={() => logDailyRevisionCheckIn(system.id!)}
+                              className="flex-1 rounded-xl font-semibold text-xs border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                            >
+                              <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                              {system.revisionLastCheckInDate === format(new Date(), 'yyyy-MM-dd')
+                                ? '✓ Checked In Today'
+                                : "Log Today's Study"}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleRevisionComplete}
+                              className="flex-1 rounded-xl font-semibold text-xs bg-sky-500 hover:bg-sky-600 text-white shadow-xs"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                              Finish & Calibrate
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : revisionDue ? (
+                      <div className="pt-2 space-y-2">
                         <Button 
-                          className="w-full rounded-xl font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                          type="button"
+                          className="w-full rounded-xl font-semibold bg-sky-500 hover:bg-sky-600 text-white shadow-xs flex items-center justify-center gap-2"
+                          onClick={() => startActiveRevision(system.id!)}
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          Start Multi-Day Revision
+                        </Button>
+                        <Button 
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full rounded-xl font-medium text-xs border-border text-muted-foreground hover:text-foreground"
                           onClick={handleRevisionComplete}
                         >
-                          <CheckCircle2 className="w-4 h-4 mr-2" />
-                          Mark Revision Complete
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                          Quick Single-Pass Completion
                         </Button>
                       </div>
-                    )}
+                    ) : null}
 
                     <div className="pt-1">
                       <Button

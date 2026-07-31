@@ -46,6 +46,20 @@ export interface StudySystem {
   nextRevisionDate: Date | null;
   /** Decay Calibration factor (1.0 = standard, >1.0 = faster decay / complex topic, <1.0 = slower decay / high retention). Defaults to 1.0. */
   decayFactor?: number;
+
+  // ── Multi-Day / Lengthy Active Revision fields (v11) ──────────────────────
+  /** Flag indicating whether this topic/system is a lengthy, multi-day revision system. */
+  isLengthy?: boolean;
+  /** Current active revision status: 'idle' | 'in_progress' | 'completed'. Defaults to 'idle'. */
+  revisionState?: 'idle' | 'in_progress' | 'completed';
+  /** Timestamp when active revision was started. */
+  revisionStartedAt?: Date | null;
+  /** ISO Date string ('YYYY-MM-DD') when the last daily revision check-in occurred. */
+  revisionLastCheckInDate?: string | null;
+  /** Number of distinct study days logged during active revision. */
+  revisionDaysLogged?: number;
+  /** Self-reported or calculated progress percentage (0 - 100) toward completing active revision. */
+  revisionProgressPercent?: number;
 }
 
 /** One year entry under a subject's PYQ section. */
@@ -219,6 +233,27 @@ export class AtlasDB extends Dexie {
           }
         });
     });
+
+    // v11: add multi-day active revision tracking fields
+    this.version(11).stores({
+      subjects: '++id, name, order',
+      systems: '++id, subjectId, name, updatedAt, nextRevisionDate, focus, revisionState',
+      history: '++id, subjectId, systemId, completedAt',
+      pyqYears: '++id, subjectId',
+      scoreLogs: '++id, type, subjectId, systemId, pyqYearId, timestamp',
+    }).upgrade(tx => {
+      return tx
+        .table('systems')
+        .toCollection()
+        .modify((sys: Record<string, unknown>) => {
+          if (!('isLengthy' in sys)) sys['isLengthy'] = false;
+          if (!('revisionState' in sys)) sys['revisionState'] = 'idle';
+          if (!('revisionStartedAt' in sys)) sys['revisionStartedAt'] = null;
+          if (!('revisionLastCheckInDate' in sys)) sys['revisionLastCheckInDate'] = null;
+          if (!('revisionDaysLogged' in sys)) sys['revisionDaysLogged'] = 0;
+          if (!('revisionProgressPercent' in sys)) sys['revisionProgressPercent'] = 0;
+        });
+    });
   }
 }
 
@@ -278,9 +313,16 @@ export async function importData(data: {
           if (!('nextRevisionDate' in s))        base.nextRevisionDate = null;
           if (!('focus' in s))                   base.focus = null;
           if (!('decayFactor' in s) || base.decayFactor === undefined) base.decayFactor = 1.0;
+          if (!('isLengthy' in s))               base.isLengthy = false;
+          if (!('revisionState' in s))           base.revisionState = 'idle';
+          if (!('revisionStartedAt' in s))       base.revisionStartedAt = null;
+          if (!('revisionLastCheckInDate' in s)) base.revisionLastCheckInDate = null;
+          if (!('revisionDaysLogged' in s))      base.revisionDaysLogged = 0;
+          if (!('revisionProgressPercent' in s)) base.revisionProgressPercent = 0;
           if (base.completionDate)    base.completionDate    = new Date(base.completionDate as unknown as string);
           if (base.lastRevisionDate)  base.lastRevisionDate  = new Date(base.lastRevisionDate as unknown as string);
           if (base.nextRevisionDate)  base.nextRevisionDate  = new Date(base.nextRevisionDate as unknown as string);
+          if (base.revisionStartedAt) base.revisionStartedAt = new Date(base.revisionStartedAt as unknown as string);
           return base;
         }),
       );
