@@ -315,7 +315,11 @@ export function ScoreLogModal({
                 value={score}
                 onChange={(e) => setScore(e.target.value)}
                 placeholder="e.g. 85"
-                className="bg-background border-border text-xs font-mono"
+                className={`bg-background border-border text-xs font-mono tabular-nums ${
+                  score !== '' && (!isNaN(scoreNum) && (scoreNum < 0 || (!isNaN(totalNum) && scoreNum > totalNum)))
+                    ? 'border-rose-500 focus-visible:ring-rose-500'
+                    : ''
+                }`}
                 required
               />
             </div>
@@ -328,11 +332,35 @@ export function ScoreLogModal({
                 value={total}
                 onChange={(e) => setTotal(e.target.value)}
                 placeholder="e.g. 100"
-                className="bg-background border-border text-xs font-mono"
+                className={`bg-background border-border text-xs font-mono tabular-nums ${
+                  total !== '' && (!isNaN(totalNum) && (totalNum <= 0 || (!isNaN(scoreNum) && scoreNum > totalNum)))
+                    ? 'border-rose-500 focus-visible:ring-rose-500'
+                    : ''
+                }`}
                 required
               />
             </div>
           </div>
+
+          {/* Real-time Inline Validation Error Alerts */}
+          {score !== '' && total !== '' && !isNaN(scoreNum) && !isNaN(totalNum) && scoreNum > totalNum && (
+            <div className="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500 flex items-center gap-2 text-xs font-medium animate-in fade-in duration-200">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Earned score ({scoreNum}) cannot exceed total possible marks ({totalNum}).</span>
+            </div>
+          )}
+          {score !== '' && !isNaN(scoreNum) && scoreNum < 0 && (
+            <div className="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500 flex items-center gap-2 text-xs font-medium animate-in fade-in duration-200">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Earned score cannot be a negative number.</span>
+            </div>
+          )}
+          {total !== '' && !isNaN(totalNum) && totalNum <= 0 && (
+            <div className="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500 flex items-center gap-2 text-xs font-medium animate-in fade-in duration-200">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Total possible marks must be greater than 0.</span>
+            </div>
+          )}
 
           {/* Live Percentage Preview */}
           {isValidScore && (
@@ -352,7 +380,7 @@ export function ScoreLogModal({
                   </p>
                 </div>
               </div>
-              <span className="text-xl font-extrabold font-mono">{percentage}%</span>
+              <span className="text-xl font-extrabold font-mono tabular-nums">{percentage}%</span>
             </div>
           )}
 

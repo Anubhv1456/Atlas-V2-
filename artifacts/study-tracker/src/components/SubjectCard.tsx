@@ -58,7 +58,7 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
             <Badge
               variant="outline"
               className={cn(
-                "font-mono text-xs px-2 py-0.5 font-bold border-border/60 shrink-0",
+                "font-mono tabular-nums text-xs px-2 py-0.5 font-bold border-border/60 shrink-0",
                 isFullyComplete && "border-emerald-500/30 text-emerald-500 bg-emerald-500/5"
               )}
             >
@@ -73,7 +73,7 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
               <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
               {systems.length} {systems.length === 1 ? 'System' : 'Systems'}
             </span>
-            <span className="font-mono text-[11px] text-foreground/80 font-semibold bg-muted/60 px-2 py-0.5 rounded-md border border-border/40">
+            <span className="font-mono tabular-nums text-[11px] text-foreground/80 font-semibold bg-muted/60 px-2 py-0.5 rounded-md border border-border/40">
               {completedTasks}/{totalTasks} tasks
             </span>
           </div>
@@ -85,7 +85,8 @@ export function SubjectCard({ subject, systems, dragHandleProps, onDelete, onRen
           <DropdownMenu>
             <DropdownMenuTrigger
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+              aria-label="Subject options"
             >
               <MoreVertical className="w-4 h-4" />
             </DropdownMenuTrigger>

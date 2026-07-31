@@ -150,25 +150,28 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
                   <button
                     onClick={() => setScoreModalPyq(year)}
                     title="Log PYQ Score"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-primary hover:bg-muted transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-muted-foreground/60 hover:text-primary hover:bg-muted transition-colors shrink-0"
+                    aria-label="Log PYQ Score"
                   >
-                    <Award className="w-3.5 h-3.5 text-primary" />
+                    <Award className="w-4 h-4 text-primary" />
                   </button>
 
                   {/* Edit */}
                   <button
                     onClick={() => { setEditTarget(year); setEditValue(year.year); }}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                    aria-label="Edit year"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
 
                   {/* Delete */}
                   <button
                     onClick={() => handlePYQDeleteClick(year)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    aria-label="Delete year"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))

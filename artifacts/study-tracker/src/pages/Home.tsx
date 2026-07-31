@@ -456,16 +456,23 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Icon toggle */}
+          {/* Icon toggle with shortcut indicator */}
           <button
             onClick={searchOpen ? closeSearch : openSearch}
-            className="ml-3 shrink-0 w-10 h-10 rounded-xl border border-border/60 bg-card flex items-center justify-center hover:bg-muted/50 transition-colors text-muted-foreground shadow-sm"
+            className="ml-3 shrink-0 h-10 px-3 rounded-xl border border-border/60 bg-card flex items-center gap-2 hover:bg-muted/50 transition-colors text-muted-foreground shadow-sm"
             aria-label={searchOpen ? 'Close search' : 'Open search'}
+            title="Open Quick Search (⌘K or /)"
           >
-            {searchOpen
-              ? <X className="w-5 h-5" />
-              : <SearchIcon className="w-5 h-5" />
-            }
+            {searchOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <>
+                <SearchIcon className="w-4 h-4" />
+                <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/60">
+                  <span className="text-[9px]">⌘</span>K
+                </kbd>
+              </>
+            )}
           </button>
         </header>
 

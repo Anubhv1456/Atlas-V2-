@@ -348,7 +348,7 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <ProgressBar progress={progress} className="flex-1 h-1" />
-                <span className="text-[10px] font-mono text-muted-foreground min-w-[3ch] shrink-0">{completedCount}/2</span>
+                <span className="text-[10px] font-mono tabular-nums text-muted-foreground min-w-[3ch] shrink-0">{completedCount}/2</span>
               </div>
             </div>
 
@@ -356,7 +356,8 @@ export function SystemCard({ system, subjectName, highlighted, dragHandleProps }
               <DropdownMenu>
                 <DropdownMenuTrigger
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+                  aria-label="System options"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </DropdownMenuTrigger>

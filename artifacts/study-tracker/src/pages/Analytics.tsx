@@ -139,28 +139,13 @@ export default function Analytics() {
   // Calculate summary stats
   const stats = useMemo(() => {
     if (filteredLogs.length === 0) {
-      return { avgPercentage: 0, totalLogs: 0, highestScore: 0, trend: 0 };
+      return { avgPercentage: 0, totalLogs: 0 };
     }
 
     const totalPct = filteredLogs.reduce((acc, log) => acc + log.percentage, 0);
     const avgPercentage = Math.round((totalPct / filteredLogs.length) * 10) / 10;
-    const highestScore = Math.max(...filteredLogs.map(l => l.percentage));
 
-    // Calculate trend: Compare avg of last 3 vs prior 3
-    let trend = 0;
-    if (filteredLogs.length >= 2) {
-      const recentCount = Math.min(3, Math.floor(filteredLogs.length / 2));
-      const recentSlice = filteredLogs.slice(-recentCount);
-      const priorSlice = filteredLogs.slice(-recentCount * 2, -recentCount);
-
-      if (priorSlice.length > 0) {
-        const recentAvg = recentSlice.reduce((a, b) => a + b.percentage, 0) / recentSlice.length;
-        const priorAvg = priorSlice.reduce((a, b) => a + b.percentage, 0) / priorSlice.length;
-        trend = Math.round((recentAvg - priorAvg) * 10) / 10;
-      }
-    }
-
-    return { avgPercentage, totalLogs: filteredLogs.length, highestScore, trend };
+    return { avgPercentage, totalLogs: filteredLogs.length };
   }, [filteredLogs]);
 
   // Spaced Repetition Compliance Metrics
@@ -443,97 +428,66 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        {/* Card 1: Spaced Repetition Compliance Rate */}
-        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">Revision Compliance</span>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
+      {/* KPI Cards: 3 Core Actionable Metrics in Squaricle Bubbles */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-xl">
+        {/* Card 1: Spaced Repetition Compliance Rate Bubble */}
+        <div className="bg-card border border-border/80 rounded-[26px] p-2.5 sm:p-3.5 aspect-square flex flex-col items-center justify-between text-center shadow-xs hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform mt-0.5">
+            <ShieldCheck className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </div>
-          <div className="mt-3">
-            <div className="flex items-baseline justify-between gap-1">
-              <p className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-foreground">
-                {complianceMetrics.rate}%
-              </p>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${complianceMetrics.statusBadgeClass}`}>
-                {complianceMetrics.statusLabel}
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {complianceMetrics.onScheduleCount}/{complianceMetrics.totalScheduled} systems on schedule
+          
+          <div className="my-auto py-0.5 space-y-0.5 w-full">
+            <p className="text-xl sm:text-2xl font-extrabold font-mono tabular-nums tracking-tight text-foreground leading-none">
+              {complianceMetrics.rate}%
+            </p>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground truncate px-1 mt-1">
+              Revision
             </p>
           </div>
+
+          <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-full truncate font-mono tabular-nums ${complianceMetrics.statusBadgeClass}`}>
+            {complianceMetrics.onScheduleCount}/{complianceMetrics.totalScheduled}
+          </span>
         </div>
 
-        {/* Card 2: Average Score */}
-        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">Average Score</span>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
-              <Award className="w-4 h-4" />
-            </div>
+        {/* Card 2: Average Score Bubble */}
+        <div className="bg-card border border-border/80 rounded-[26px] p-2.5 sm:p-3.5 aspect-square flex flex-col items-center justify-between text-center shadow-xs hover:border-emerald-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform mt-0.5">
+            <Award className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight">
+
+          <div className="my-auto py-0.5 space-y-0.5 w-full">
+            <p className="text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-emerald-500 tracking-tight leading-none">
               {stats.avgPercentage}%
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Across {stats.totalLogs} recorded logs</p>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground truncate px-1 mt-1">
+              Avg Score
+            </p>
           </div>
+
+          <span className="text-[9px] sm:text-[10px] font-medium font-mono tabular-nums text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full border border-border/60 max-w-full truncate">
+            {stats.totalLogs} logs
+          </span>
         </div>
 
-        {/* Card 3: Memory Retrievability */}
-        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground group-hover:text-indigo-500 transition-colors">Memory Recall</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center justify-center">
-              <Activity className="w-4 h-4" />
-            </div>
+        {/* Card 3: Memory Recall Bubble */}
+        <div className="bg-card border border-border/80 rounded-[26px] p-2.5 sm:p-3.5 aspect-square flex flex-col items-center justify-between text-center shadow-xs hover:border-indigo-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform mt-0.5">
+            <Activity className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-indigo-500 tracking-tight">
+
+          <div className="my-auto py-0.5 space-y-0.5 w-full">
+            <p className="text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-indigo-500 tracking-tight leading-none">
               {complianceMetrics.avgRetrievability}%
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Estimated memory retention</p>
-          </div>
-        </div>
-
-        {/* Card 4: Highest Mark */}
-        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground group-hover:text-emerald-500 transition-colors">Highest Mark</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-500 tracking-tight">
-              {stats.highestScore}%
+            <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground truncate px-1 mt-1">
+              Recall
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Personal best score</p>
           </div>
-        </div>
 
-        {/* Card 5: Score Trend */}
-        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">Score Trend</span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
-              stats.trend >= 0 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
-            }`}>
-              {stats.trend >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-            </div>
-          </div>
-          <div className="mt-3">
-            <p className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${
-              stats.trend >= 0 ? 'text-emerald-500' : 'text-rose-500'
-            }`}>
-              {stats.trend >= 0 ? `+${stats.trend}%` : `${stats.trend}%`}
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">vs prior test window</p>
-          </div>
+          <span className="text-[9px] sm:text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20 max-w-full truncate">
+            Retrievability
+          </span>
         </div>
       </div>
 
@@ -839,22 +793,24 @@ export default function Analytics() {
                     unit="%"
                   />
                   <Tooltip
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
+                    allowEscapeViewBox={{ x: false, y: false }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-3 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-xs">
-                            <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5">
-                              <span className="font-bold text-foreground">{data.title}</span>
-                              <Badge className="text-[10px] py-0 px-1.5 rounded-md">{data.type}</Badge>
+                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-2.5 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-[240px]">
+                            <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5">
+                              <span className="font-bold text-foreground truncate">{data.title}</span>
+                              <Badge className="text-[10px] py-0 px-1.5 rounded-md shrink-0">{data.type}</Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground font-medium">{data.fullDate}</p>
                             <div className="flex items-center justify-between text-xs pt-1">
                               <span className="font-medium text-muted-foreground">Score: {data.scoreStr}</span>
-                              <span className="font-bold font-mono text-primary text-sm">{data.percentage}%</span>
+                              <span className="font-bold font-mono tabular-nums text-primary text-sm">{data.percentage}%</span>
                             </div>
                             {data.notes && (
-                              <p className="text-[11px] text-muted-foreground bg-muted/60 p-2 rounded-xl italic">
+                              <p className="text-[11px] text-muted-foreground bg-muted/60 p-2 rounded-xl italic break-words">
                                 "{data.notes}"
                               </p>
                             )}
@@ -902,13 +858,15 @@ export default function Analytics() {
                   <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
                   <Tooltip
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
+                    allowEscapeViewBox={{ x: false, y: false }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-3 rounded-xl text-xs space-y-1 shadow-lg">
-                            <p className="font-bold">{data.fullName}</p>
-                            <p className="text-muted-foreground font-mono">Average Score: <strong className="text-primary">{data.average}%</strong></p>
+                          <div className="bg-popover/95 backdrop-blur-md border border-border/80 p-3 rounded-xl text-xs space-y-1 shadow-lg max-w-[220px]">
+                            <p className="font-bold truncate">{data.fullName}</p>
+                            <p className="text-muted-foreground font-mono tabular-nums">Average Score: <strong className="text-primary">{data.average}%</strong></p>
                             <p className="text-[10px] text-muted-foreground">Based on {data.count} log(s)</p>
                           </div>
                         );

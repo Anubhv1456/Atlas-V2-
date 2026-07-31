@@ -16,12 +16,20 @@ export interface AutoSnapshot {
 }
 
 export function isAutoBackupEnabled(): boolean {
-  const val = localStorage.getItem(ENABLED_KEY);
-  return val === null ? true : val === 'true'; // Default enabled
+  try {
+    const val = localStorage.getItem(ENABLED_KEY);
+    return val === null ? true : val === 'true'; // Default enabled
+  } catch {
+    return true;
+  }
 }
 
 export function setAutoBackupEnabled(enabled: boolean): void {
-  localStorage.setItem(ENABLED_KEY, String(enabled));
+  try {
+    localStorage.setItem(ENABLED_KEY, String(enabled));
+  } catch (err) {
+    console.warn('Unable to persist auto backup preference:', err);
+  }
 }
 
 export function getAutoSnapshots(): AutoSnapshot[] {
@@ -87,9 +95,13 @@ export async function restoreAutoSnapshot(id: string): Promise<boolean> {
 }
 
 export function deleteAutoSnapshot(id: string): void {
-  const snapshots = getAutoSnapshots();
-  const updated = snapshots.filter(s => s.id !== id);
-  localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(updated));
+  try {
+    const snapshots = getAutoSnapshots();
+    const updated = snapshots.filter(s => s.id !== id);
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('Failed to delete auto snapshot:', err);
+  }
 }
 
 export async function checkAndRunAutoBackup(): Promise<void> {
