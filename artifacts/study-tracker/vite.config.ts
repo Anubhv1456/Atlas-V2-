@@ -54,6 +54,12 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist'),
     emptyOutDir: true,
+    minify: 'esbuild',
+    cssMinify: true,
+    target: 'es2020',
+  },
+  esbuild: {
+    drop: ['console', 'debugger'],
   },
   server: {
     port,

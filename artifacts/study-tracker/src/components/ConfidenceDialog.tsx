@@ -10,11 +10,12 @@ interface ConfidenceDialogProps {
   onClose?: () => void;
 }
 
-const OPTIONS: { value: SystemStatus; emoji: string; label: string; bg: string; border: string; text: string }[] = [
+const OPTIONS: { value: SystemStatus; emoji: string; label: string; detail: string; bg: string; border: string; text: string }[] = [
   {
     value:  'Strong',
     emoji:  '🟢',
     label:  'Strong',
+    detail: 'High confidence & retention',
     bg:     'hover:bg-green-50 dark:hover:bg-green-900/20',
     border: 'border-green-200 dark:border-green-800/50 hover:border-green-400 dark:hover:border-green-600',
     text:   'text-green-800 dark:text-green-400',
@@ -23,6 +24,7 @@ const OPTIONS: { value: SystemStatus; emoji: string; label: string; bg: string; 
     value:  'Average',
     emoji:  '🟡',
     label:  'Average',
+    detail: 'Fair understanding',
     bg:     'hover:bg-amber-50 dark:hover:bg-amber-900/20',
     border: 'border-amber-200 dark:border-amber-800/50 hover:border-amber-400 dark:hover:border-amber-600',
     text:   'text-amber-800 dark:text-amber-400',
@@ -31,6 +33,7 @@ const OPTIONS: { value: SystemStatus; emoji: string; label: string; bg: string; 
     value:  'Weak',
     emoji:  '🔴',
     label:  'Weak',
+    detail: 'Needs extra practice',
     bg:     'hover:bg-red-50 dark:hover:bg-red-900/20',
     border: 'border-red-200 dark:border-red-800/50 hover:border-red-400 dark:hover:border-red-600',
     text:   'text-red-800 dark:text-red-400',
@@ -39,8 +42,8 @@ const OPTIONS: { value: SystemStatus; emoji: string; label: string; bg: string; 
 
 export function ConfidenceDialog({
   open,
-  title = 'How well do you know this system?',
-  subtitle,
+  title = 'Rate your topic confidence',
+  subtitle = 'Choose a mastery level to guide your revision schedule',
   onSelect,
   onClose,
 }: ConfidenceDialogProps) {
@@ -50,7 +53,7 @@ export function ConfidenceDialog({
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold leading-snug">{title}</DialogTitle>
           {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
           )}
         </DialogHeader>
         <div className="py-4 space-y-3">
@@ -59,14 +62,19 @@ export function ConfidenceDialog({
               key={opt.value}
               onClick={() => onSelect(opt.value)}
               className={cn(
-                'w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 transition-all duration-150 text-left',
+                'w-full flex items-center justify-between px-5 py-3.5 rounded-xl border-2 transition-all duration-150 text-left',
                 'bg-card active:scale-[0.98]',
                 opt.bg,
                 opt.border,
               )}
             >
-              <span className="text-2xl leading-none">{opt.emoji}</span>
-              <span className={cn('text-base font-semibold', opt.text)}>{opt.label}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl leading-none">{opt.emoji}</span>
+                <div>
+                  <div className={cn('text-sm font-bold', opt.text)}>{opt.label}</div>
+                  <div className="text-[11px] text-muted-foreground">{opt.detail}</div>
+                </div>
+              </div>
             </button>
           ))}
         </div>

@@ -214,14 +214,14 @@ export default function Analytics() {
       };
     }).sort((a, b) => a.rate - b.rate);
 
-    let statusLabel = 'High Compliance';
+    let statusLabel = 'Revisions Up to Date';
     let statusBadgeClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
 
     if (rate < 60) {
-      statusLabel = 'Critical Debt';
+      statusLabel = 'Revisions Overdue';
       statusBadgeClass = 'bg-destructive/10 text-destructive border-destructive/30';
     } else if (rate < 85) {
-      statusLabel = 'Moderate Debt';
+      statusLabel = 'Revisions Pending';
       statusBadgeClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
     }
 
@@ -329,7 +329,7 @@ export default function Analytics() {
         subjectName: subName,
         title: topVulnerable.name,
         reason,
-        badge: topVulnerable.status === 'Weak' ? 'Weak Confidence' : 'High Revision Debt',
+        badge: topVulnerable.status === 'Weak' ? 'Weak Confidence' : 'Overdue Revision',
         badgeColor: 'bg-destructive/10 text-destructive border-destructive/30',
       };
     }

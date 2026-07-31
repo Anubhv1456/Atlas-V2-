@@ -38,24 +38,20 @@ function RevisionPill({ sys }: { sys: StudySystem }) {
   if (!sys.completionDate) return null;
   const retrievability = getRetrievability(sys);
   const health = getRetrievabilityHealth(retrievability);
-  const decayFactor = getSystemDecayFactor(sys);
 
   if (isRevisionOverdue(sys)) return (
     <span className="flex items-center gap-1 text-[10px] font-bold text-destructive shrink-0 bg-destructive/10 px-2.5 py-0.5 rounded-full border border-destructive/20">
       <AlertCircle className="w-2.5 h-2.5" />{retrievability}% ({daysOverdue(sys)}d overdue)
-      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   if (isRevisionDue(sys)) return (
     <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-500 shrink-0 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
       <Clock className="w-2.5 h-2.5" />{retrievability}% Due today
-      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   if (sys.nextRevisionDate) return (
     <span className={cn("flex items-center gap-1 text-[10px] font-semibold shrink-0 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/40", health.colorClass)}>
       <Brain className="w-2.5 h-2.5" />{retrievability}% Recall
-      {decayFactor !== 1.0 && <span className="opacity-80 font-mono">({decayFactor}x)</span>}
     </span>
   );
   return null;
@@ -260,12 +256,12 @@ export default function Home() {
       candidates.push({
         id: 'decay-critical',
         confidence: 98 + Math.min(decayScore, 2),
-        badge: overdue > 0 ? 'CRITICAL DECAY' : 'REVISION DUE',
+        badge: overdue > 0 ? 'NEEDS REVISION' : 'REVISION DUE',
         badgeClass: 'bg-destructive/10 text-destructive border-destructive/20',
         icon: <AlertCircle className="w-4 h-4 text-destructive shrink-0" />,
         text: (
           <span>
-            <strong className="text-foreground">{topDecaySystem.name}</strong> ({sub?.name}) has accumulated high recall decay ({overdue > 0 ? `${overdue}d overdue` : 'due today'}, {topDecaySystem.status} confidence).
+            <strong className="text-foreground">{topDecaySystem.name}</strong> ({sub?.name}) is due for review ({overdue > 0 ? `${overdue}d overdue` : 'due today'}, {topDecaySystem.status.toLowerCase()} confidence).
           </span>
         ),
         actionLabel: 'Review Now',
@@ -390,7 +386,7 @@ export default function Home() {
         icon: <Flame className="w-4 h-4 text-amber-500 shrink-0" />,
         text: (
           <span>
-            Zero overdue revisions and an active <strong className="text-foreground">{streak}-day streak</strong>! Your memory recall engine is running at peak efficiency.
+            Zero overdue revisions and an active <strong className="text-foreground">{streak}-day streak</strong>! All your scheduled revisions are up to date.
           </span>
         ),
         actionLabel: 'View Timeline',
@@ -431,7 +427,7 @@ export default function Home() {
             <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] shadow-sm border border-border/50 object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
               <div className="flex items-center gap-1.5 text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">
-                <Sparkles className="w-3 h-3" /> Medical Mastery Engine
+                <Sparkles className="w-3 h-3" /> Medical Study Tracker
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{greeting}</h1>
             </div>
@@ -557,14 +553,14 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {streak} <span className="text-xs font-sans font-normal text-muted-foreground">{streak === 1 ? 'day' : 'days'}</span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Consecutive active study</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Consecutive daily study</div>
                   </div>
                 </div>
 
                 {/* Overall Completion */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">Mastery Index</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">Course Completion</span>
                     <div className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
                       <TrendingUp className="w-4 h-4" />
                     </div>
@@ -573,14 +569,14 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {overallProgress}%
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{completedTasks}/{totalTasks} objectives done</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{completedTasks}/{totalTasks} tasks done</div>
                   </div>
                 </div>
 
                 {/* Strong Systems */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-emerald-500 transition-colors">High Mastery</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-emerald-500 transition-colors">Mastered Topics</span>
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                       <Award className="w-4 h-4" />
                     </div>
@@ -589,14 +585,14 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {strongSystems} <span className="text-xs font-sans font-normal text-muted-foreground">/ {systems.length}</span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Validated topic systems</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Strong confidence topics</div>
                   </div>
                 </div>
 
                 {/* Due Revisions */}
                 <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-sky-500/40 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-sky-500 transition-colors">Spaced Recall</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-sky-500 transition-colors">Revisions Due</span>
                     <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500 border border-sky-500/20">
                       <Clock className="w-4 h-4" />
                     </div>
@@ -605,7 +601,7 @@ export default function Home() {
                     <div className="text-2xl font-extrabold font-mono tracking-tight text-foreground">
                       {allDueRevisions.length}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Pending memory passes</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Reviews scheduled today</div>
                   </div>
                 </div>
               </div>
@@ -614,7 +610,7 @@ export default function Home() {
             {/* ── Focus for Today ───────────────────────── */}
             <section className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                <Target className="w-3.5 h-3.5" /> Daily High-Yield Focus
+                <Target className="w-3.5 h-3.5" /> Today's Primary Focus
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 {/* Primary Focus */}

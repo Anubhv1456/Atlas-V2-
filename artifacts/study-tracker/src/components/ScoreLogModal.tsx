@@ -210,7 +210,7 @@ export function ScoreLogModal({
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              System Revision
+              Topic Revision
             </button>
             <button
               type="button"
