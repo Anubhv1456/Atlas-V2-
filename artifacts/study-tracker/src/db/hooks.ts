@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Subject, StudySystem, HistoryEntry, PYQYear } from './database';
+import { db, Subject, StudySystem, HistoryEntry, PYQYear, ScoreLog } from './database';
 import { SystemStatus } from './database';
 import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today, sortSystemsByRevisionPriority, calculateDurationMultiplier, getActiveRevisionSystems } from './revisionEngine';
 import { toast } from 'sonner';
@@ -72,6 +72,14 @@ export function usePYQsBySubject(subjectId: number): PYQYear[] {
 /** All PYQ years across all subjects. */
 export function useAllPYQs(): PYQYear[] {
   return useLiveQuery(() => db.pyqYears.toArray()) ?? [];
+}
+
+/** All score logs for a specific subject. */
+export function useScoreLogsBySubject(subjectId: number): ScoreLog[] {
+  return useLiveQuery(
+    () => db.scoreLogs.where('subjectId').equals(subjectId).toArray(),
+    [subjectId]
+  ) ?? [];
 }
 
 // ── Actions ────────────────────────────────────────────────────────────────
@@ -266,6 +274,27 @@ export async function addPYQYear(subjectId: number, year: string) {
     completedAt: null,
     createdAt: new Date(),
   });
+}
+
+/** Batch add multiple PYQ year entries to a subject (ignores duplicates). */
+export async function addPYQYearBatch(subjectId: number, years: string[]) {
+  const existing = await db.pyqYears.where('subjectId').equals(subjectId).toArray();
+  const existingYears = new Set(existing.map(y => y.year.trim().toLowerCase()));
+
+  const toAdd = years
+    .map(y => y.trim())
+    .filter(y => y && !existingYears.has(y.toLowerCase()))
+    .map(year => ({
+      subjectId,
+      year,
+      completed: false,
+      completedAt: null,
+      createdAt: new Date(),
+    }));
+
+  if (toAdd.length > 0) {
+    await db.pyqYears.bulkAdd(toAdd);
+  }
 }
 
 /** Rename a PYQ year entry. */
