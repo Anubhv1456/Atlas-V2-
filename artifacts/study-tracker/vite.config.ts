@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator';
 
 const port = 3000;
 
@@ -37,6 +38,38 @@ export default defineConfig({
         enabled: false,
       },
     }),
+    obfuscatorPlugin({
+      include: [/\.(js|ts|tsx|jsx)$/],
+      exclude: [/node_modules/],
+      apply: 'build',
+      options: {
+        compact: true,
+        controlFlowFlattening: false,
+        deadCodeInjection: false,
+        debugProtection: false,
+        debugProtectionInterval: 0,
+        disableConsoleOutput: true,
+        identifierNamesGenerator: 'hexadecimal',
+        log: false,
+        numbersToExpressions: false,
+        renameGlobals: false,
+        selfDefending: false,
+        simplify: true,
+        splitStrings: true,
+        stringArray: true,
+        stringArrayCallsTransform: true,
+        stringArrayEncoding: ['base64'],
+        stringArrayIndexShift: true,
+        stringArrayRotate: true,
+        stringArrayShuffle: true,
+        stringArrayWrappersCount: 1,
+        stringArrayWrappersChainedCalls: true,
+        stringArrayWrappersParametersMaxCount: 2,
+        stringArrayWrappersType: 'variable',
+        stringArrayThreshold: 0.75,
+        unicodeEscapeSequence: false,
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -54,12 +87,22 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist'),
     emptyOutDir: true,
-    minify: 'esbuild',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+      },
+      format: {
+        comments: false,
+      },
+      mangle: {
+        toplevel: true,
+      },
+    },
     cssMinify: true,
     target: 'es2020',
-  },
-  esbuild: {
-    drop: ['console', 'debugger'],
   },
   server: {
     port,

@@ -12,7 +12,7 @@
     "dev": "npm run dev --workspace=artifacts/study-tracker",
     "dev:study-tracker": "npm run dev --workspace=artifacts/study-tracker",
     "dev:mockup": "npm run dev --workspace=artifacts/mockup-sandbox",
-    "build": "npm run build --workspace=artifacts/study-tracker",
+    "build": "npm run build --workspace=artifacts/study-tracker && mkdir -p dist && cp -r artifacts/study-tracker/dist/* dist/",
     "typecheck": "tsc --build",
     "lint": "tsc --build"
   },
@@ -25,7 +25,10 @@
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
+    "javascript-obfuscator": "^5.5.0",
     "prettier": "^3.9.5",
-    "typescript": "~5.9.3"
+    "terser": "^5.49.0",
+    "typescript": "~5.9.3",
+    "vite-plugin-javascript-obfuscator": "^3.1.0"
   }
 }
