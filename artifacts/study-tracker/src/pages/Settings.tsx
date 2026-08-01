@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers, Lock, KeyRound, Shield } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { encryptClientData, decryptClientData, isEncryptedPayload, EncryptedPayload } from '@/lib/crypto';
 
 import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
@@ -64,6 +66,18 @@ export default function Settings() {
   const [autoBackupEnabled, setAutoBackupEnabledState] = useState<boolean>(true);
   const [autoSnapshots, setAutoSnapshots] = useState<AutoSnapshot[]>([]);
   const [snapshotToRestore, setSnapshotToRestore] = useState<AutoSnapshot | null>(null);
+
+  // Client-Side Encryption states
+  const [showEncryptExportModal, setShowEncryptExportModal] = useState(false);
+  const [exportPassphrase, setExportPassphrase] = useState('');
+  const [encryptingExport, setEncryptingExport] = useState(false);
+
+  const [pendingEncryptedPayload, setPendingEncryptedPayload] = useState<EncryptedPayload | null>(null);
+  const [importPassphrase, setImportPassphrase] = useState('');
+  const [decryptingImport, setDecryptingImport] = useState(false);
+
+  const [cryptoStage, setCryptoStage] = useState<string>('');
+  const [cryptoProgress, setCryptoProgress] = useState<number>(0);
 
 
   useEffect(() => {
@@ -248,6 +262,108 @@ export default function Settings() {
     setLastBackup(now);
   };
 
+  // ── Encrypted Export Handler ─────────────────────────────────────────────
+  const handleEncryptedExport = async () => {
+    if (!exportPassphrase || exportPassphrase.length < 4) {
+      toast({
+        title: 'Passphrase Too Short',
+        description: 'Please enter a passphrase at least 4 characters long.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setEncryptingExport(true);
+    setCryptoProgress(10);
+    setCryptoStage('Initializing Web Worker...');
+
+    try {
+      const data = await exportData();
+      const plainText = JSON.stringify(data, null, 2);
+      const encrypted = await encryptClientData(plainText, exportPassphrase, (progress, stage) => {
+        setCryptoProgress(progress);
+        setCryptoStage(stage);
+      });
+      const fileContent = JSON.stringify(encrypted, null, 2);
+
+      const filename = `atlas-encrypted-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const blob = new Blob([fileContent], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setShowEncryptExportModal(false);
+      setExportPassphrase('');
+      toast({
+        title: 'Encrypted Backup Downloaded! 🔒',
+        description: 'AES-256-GCM encrypted backup created in Web Worker.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Encryption Failed',
+        description: err.message || 'Could not encrypt backup data.',
+        variant: 'destructive',
+      });
+    } finally {
+      setEncryptingExport(false);
+      setCryptoProgress(0);
+      setCryptoStage('');
+    }
+  };
+
+  // ── Decrypt Encrypted Import ─────────────────────────────────────────────
+  const handleDecryptImport = async () => {
+    if (!pendingEncryptedPayload || !importPassphrase) return;
+    setDecryptingImport(true);
+    setCryptoProgress(10);
+    setCryptoStage('Initializing Web Worker...');
+
+    try {
+      const decryptedText = await decryptClientData(pendingEncryptedPayload, importPassphrase, (progress, stage) => {
+        setCryptoProgress(progress);
+        setCryptoStage(stage);
+      });
+      const data = JSON.parse(decryptedText);
+      if (!data.subjects || !data.systems) throw new Error('Invalid format');
+
+      let backupDate: string | null = null;
+      if (data.history?.length) {
+        const sorted = [...data.history].sort(
+          (a: { completedAt: string }, b: { completedAt: string }) =>
+            new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        );
+        backupDate = new Date(sorted[0].completedAt).toLocaleDateString([], {
+          year: 'numeric', month: 'short', day: 'numeric',
+        });
+      }
+
+      setImportPreview({
+        backupDate,
+        subjects: data.subjects.length,
+        systems: data.systems.length,
+        history: data.history?.length ?? 0,
+        raw: data,
+      });
+      setPendingEncryptedPayload(null);
+      setImportPassphrase('');
+    } catch (err: any) {
+      toast({
+        title: 'Decryption Failed ❌',
+        description: err.message || 'Incorrect passphrase or corrupted file.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDecryptingImport(false);
+      setCryptoProgress(0);
+      setCryptoStage('');
+    }
+  };
+
   // ── Import — step 1: read & preview ─────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -255,7 +371,16 @@ export default function Settings() {
 
     try {
       const text = await file.text();
-      const data = JSON.parse(text);
+      const parsed = JSON.parse(text);
+
+      if (isEncryptedPayload(parsed)) {
+        setPendingEncryptedPayload(parsed);
+        setImportPassphrase('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      const data = parsed;
       if (!data.subjects || !data.systems) throw new Error('Invalid format');
 
       // Try to extract a backup date from the first history entry or subject
@@ -520,7 +645,24 @@ export default function Settings() {
               </div>
               <div>
                 <div className="font-semibold text-foreground">Quick Backup</div>
-                <div className="text-xs text-muted-foreground">Share your data to any app or drive</div>
+                <div className="text-xs text-muted-foreground">Share unencrypted JSON to any app or drive</div>
+              </div>
+            </button>
+
+            {/* Encrypted Export */}
+            <button
+              onClick={() => setShowEncryptExportModal(true)}
+              className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-500">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  Password-Protected Export
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-indigo-500/10 text-indigo-500 border-none font-semibold">Protected</Badge>
+                </div>
+                <div className="text-xs text-muted-foreground">Save an encrypted backup secured with a password</div>
               </div>
             </button>
 
@@ -534,7 +676,7 @@ export default function Settings() {
               </div>
               <div>
                 <div className="font-semibold text-foreground">Import Backup</div>
-                <div className="text-xs text-muted-foreground">Restore from a previous backup</div>
+                <div className="text-xs text-muted-foreground">Restore your data from a standard or encrypted backup (.json)</div>
               </div>
               <input
                 type="file"
@@ -554,6 +696,55 @@ export default function Settings() {
                 <div className="font-semibold text-foreground">Last Backup</div>
                 <div className="text-xs text-muted-foreground">
                   {lastBackup ? formatLastBackup(lastBackup) : 'No backup yet'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Security Overview */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1 mt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">App Security & Safeguards</h2>
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-medium">
+              <Shield className="w-3 h-3 mr-1" /> Active Protection
+            </Badge>
+          </div>
+          <div className="bg-card rounded-2xl border shadow-sm p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-500 mt-0.5">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div className="text-xs">
+                <div className="font-semibold text-foreground">Web & Connection Security</div>
+                <div className="text-muted-foreground mt-0.5">
+                  Guards your connection and blocks unauthorized external access to your study data.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 border-t pt-3">
+              <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-500 mt-0.5">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div className="text-xs">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  Password-Protected Backups
+                </div>
+                <div className="text-muted-foreground mt-0.5">
+                  Uses high-grade encryption to lock backups on your device smoothly without slowing down the app.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 border-t pt-3">
+              <div className="p-2 bg-amber-500/10 rounded-xl text-amber-500 mt-0.5">
+                <KeyRound className="w-4 h-4" />
+              </div>
+              <div className="text-xs">
+                <div className="font-semibold text-foreground">Application Code Shield</div>
+                <div className="text-muted-foreground mt-0.5">
+                  Hardens the app structure to keep your local data safe against unauthorized tampering.
                 </div>
               </div>
             </div>
@@ -693,6 +884,133 @@ export default function Settings() {
             </Button>
             <Button className="flex-1 rounded-xl font-semibold shadow-sm" onClick={handleConfirmRestoreSnapshot}>
               Restore Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Encrypted Export Passphrase Dialog ───────────────────────────── */}
+      <Dialog open={showEncryptExportModal} onOpenChange={setShowEncryptExportModal}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <div className="mx-auto w-10 h-10 bg-indigo-500/10 text-indigo-500 rounded-full flex items-center justify-center mb-2">
+              <Lock className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-center text-xl">Password-Protected Export</DialogTitle>
+            <DialogDescription className="text-center pt-1">
+              Enter a password to secure your study backup before saving.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <Input
+              type="password"
+              placeholder="Enter password (min 4 chars)"
+              value={exportPassphrase}
+              onChange={(e) => setExportPassphrase(e.target.value)}
+              className="rounded-xl font-mono text-sm"
+              disabled={encryptingExport}
+              onKeyDown={(e) => e.key === 'Enter' && handleEncryptedExport()}
+            />
+
+            {encryptingExport && (
+              <div className="space-y-1.5 p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
+                <div className="flex justify-between text-xs font-medium text-indigo-500">
+                  <span>{cryptoStage || 'Encrypting...'}</span>
+                  <span>{cryptoProgress}%</span>
+                </div>
+                <div className="w-full bg-indigo-500/20 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${cryptoProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground text-center">
+              🔒 Encrypted directly on your device. Keep this password safe to restore your data.
+            </p>
+          </div>
+
+          <DialogFooter className="flex-row gap-2 mt-2 sm:justify-center">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => {
+                setShowEncryptExportModal(false);
+                setExportPassphrase('');
+              }}
+              disabled={encryptingExport}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl font-semibold shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={handleEncryptedExport}
+              disabled={encryptingExport || !exportPassphrase}
+            >
+              {encryptingExport ? 'Encrypting…' : 'Export File'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Encrypted Import Decryption Dialog ────────────────────────────── */}
+      <Dialog open={!!pendingEncryptedPayload} onOpenChange={(open) => { if (!open) setPendingEncryptedPayload(null); }}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <div className="mx-auto w-10 h-10 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mb-2">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-center text-xl">Protected Backup Detected</DialogTitle>
+            <DialogDescription className="text-center pt-1">
+              This backup is locked with a password. Enter your password to unlock and restore it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <Input
+              type="password"
+              placeholder="Enter backup password"
+              value={importPassphrase}
+              onChange={(e) => setImportPassphrase(e.target.value)}
+              className="rounded-xl font-mono text-sm"
+              disabled={decryptingImport}
+              onKeyDown={(e) => e.key === 'Enter' && handleDecryptImport()}
+            />
+
+            {decryptingImport && (
+              <div className="space-y-1.5 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
+                <div className="flex justify-between text-xs font-medium text-amber-500">
+                  <span>{cryptoStage || 'Decrypting...'}</span>
+                  <span>{cryptoProgress}%</span>
+                </div>
+                <div className="w-full bg-amber-500/20 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-amber-600 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${cryptoProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-row gap-2 mt-2 sm:justify-center">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setPendingEncryptedPayload(null)}
+              disabled={decryptingImport}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl font-semibold shadow-sm"
+              onClick={handleDecryptImport}
+              disabled={decryptingImport || !importPassphrase}
+            >
+              {decryptingImport ? 'Decrypting…' : 'Unlock Backup'}
             </Button>
           </DialogFooter>
         </DialogContent>

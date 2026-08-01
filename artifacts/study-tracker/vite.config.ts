@@ -1,11 +1,58 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator';
+import JavaScriptObfuscator from 'javascript-obfuscator';
 
 const port = 3000;
+
+function bundleObfuscatorPlugin(): Plugin {
+  return {
+    name: 'bundle-javascript-obfuscator',
+    apply: 'build',
+    enforce: 'post',
+    renderChunk(code, chunk) {
+      if (!chunk.fileName.endsWith('.js')) {
+        return null;
+      }
+
+      const obfuscationResult = JavaScriptObfuscator.obfuscate(code, {
+        compact: true,
+        controlFlowFlattening: false,
+        deadCodeInjection: false,
+        debugProtection: false,
+        debugProtectionInterval: 0,
+        disableConsoleOutput: true,
+        identifierNamesGenerator: 'hexadecimal',
+        log: false,
+        numbersToExpressions: false,
+        renameGlobals: false,
+        selfDefending: false,
+        simplify: true,
+        splitStrings: true,
+        stringArray: true,
+        stringArrayCallsTransform: true,
+        stringArrayEncoding: ['base64'],
+        stringArrayIndexShift: true,
+        stringArrayRotate: true,
+        stringArrayShuffle: true,
+        stringArrayWrappersCount: 1,
+        stringArrayWrappersChainedCalls: true,
+        stringArrayWrappersParametersMaxCount: 2,
+        stringArrayWrappersType: 'variable',
+        stringArrayThreshold: 0.75,
+        unicodeEscapeSequence: false,
+        sourceMap: false,
+      });
+
+      return {
+        code: obfuscationResult.getObfuscatedCode(),
+        map: null,
+      };
+    },
+  };
+}
 
 export default defineConfig({
   base: '/',
@@ -38,38 +85,7 @@ export default defineConfig({
         enabled: false,
       },
     }),
-    obfuscatorPlugin({
-      include: [/\.(js|ts|tsx|jsx)$/],
-      exclude: [/node_modules/],
-      apply: 'build',
-      options: {
-        compact: true,
-        controlFlowFlattening: false,
-        deadCodeInjection: false,
-        debugProtection: false,
-        debugProtectionInterval: 0,
-        disableConsoleOutput: true,
-        identifierNamesGenerator: 'hexadecimal',
-        log: false,
-        numbersToExpressions: false,
-        renameGlobals: false,
-        selfDefending: false,
-        simplify: true,
-        splitStrings: true,
-        stringArray: true,
-        stringArrayCallsTransform: true,
-        stringArrayEncoding: ['base64'],
-        stringArrayIndexShift: true,
-        stringArrayRotate: true,
-        stringArrayShuffle: true,
-        stringArrayWrappersCount: 1,
-        stringArrayWrappersChainedCalls: true,
-        stringArrayWrappersParametersMaxCount: 2,
-        stringArrayWrappersType: 'variable',
-        stringArrayThreshold: 0.75,
-        unicodeEscapeSequence: false,
-      },
-    }),
+    bundleObfuscatorPlugin(),
   ],
   resolve: {
     alias: {
@@ -87,6 +103,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist'),
     emptyOutDir: true,
+    sourcemap: false,
     minify: 'terser',
     terserOptions: {
       compress: {

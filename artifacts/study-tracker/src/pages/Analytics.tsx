@@ -429,7 +429,7 @@ export default function Analytics() {
       )}
 
       {/* KPI Cards: 3 Core Actionable Metrics in Squaricle Bubbles */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-xl">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-xl mx-auto">
         {/* Card 1: Spaced Repetition Compliance Rate Bubble */}
         <div className="bg-card border border-border/80 rounded-[26px] p-2.5 sm:p-3.5 aspect-square flex flex-col items-center justify-between text-center shadow-xs hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform mt-0.5">
