@@ -248,20 +248,39 @@ export default function Home() {
     // 1. KNOWLEDGE DECAY & REVISION DEBT (Highest Priority: 98-100)
     const sortedByDecay = sortSystemsByRevisionPriority(systems, now);
     const topDecaySystem = sortedByDecay[0];
-    if (topDecaySystem && calculateDecayScore(topDecaySystem, now) > 0) {
+    if (topDecaySystem && (isRevisionDue(topDecaySystem, now) || topDecaySystem.status === 'Weak' || topDecaySystem.revisionState === 'in_progress')) {
       const sub = subjects.find(s => s.id === topDecaySystem.subjectId);
       const overdue = daysOverdue(topDecaySystem, now);
       const decayScore = calculateDecayScore(topDecaySystem, now);
+      const isDueToday = isRevisionDue(topDecaySystem, now) && overdue === 0;
+
+      let badge = 'REVISION DUE';
+      let badgeClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+      let statusText = 'due today';
+
+      if (overdue > 0) {
+        badge = 'NEEDS REVISION';
+        badgeClass = 'bg-destructive/10 text-destructive border-destructive/20';
+        statusText = `${overdue}d overdue`;
+      } else if (topDecaySystem.revisionState === 'in_progress') {
+        badge = 'ACTIVE SESSION';
+        badgeClass = 'bg-primary/10 text-primary border-primary/20';
+        statusText = `Day ${topDecaySystem.revisionDaysLogged || 1} logged`;
+      } else if (!isDueToday && topDecaySystem.status === 'Weak') {
+        badge = 'WEAK CONFIDENCE';
+        badgeClass = 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+        statusText = 'weak confidence';
+      }
 
       candidates.push({
         id: 'decay-critical',
         confidence: 98 + Math.min(decayScore, 2),
-        badge: overdue > 0 ? 'NEEDS REVISION' : 'REVISION DUE',
-        badgeClass: 'bg-destructive/10 text-destructive border-destructive/20',
+        badge,
+        badgeClass,
         icon: <AlertCircle className="w-4 h-4 text-destructive shrink-0" />,
         text: (
           <span>
-            <strong className="text-foreground">{topDecaySystem.name}</strong> ({sub?.name}) is due for review ({overdue > 0 ? `${overdue}d overdue` : 'due today'}, {topDecaySystem.status.toLowerCase()} confidence).
+            <strong className="text-foreground">{topDecaySystem.name}</strong> ({sub?.name}) requires attention ({statusText}, {topDecaySystem.status.toLowerCase()} confidence).
           </span>
         ),
         actionLabel: 'Review Now',

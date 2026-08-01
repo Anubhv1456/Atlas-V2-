@@ -542,8 +542,8 @@ export default function Settings() {
         <section>
           <div className="flex items-center justify-between mb-3 px-1 mt-8">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Automated Auto-Snapshots</h2>
-            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-mono">
-              <ShieldCheck className="w-3 h-3 mr-1" /> Active Safeguard
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-medium bg-emerald-500/5 px-2 py-0.5 rounded-full">
+              <ShieldCheck className="w-3 h-3 mr-1 text-emerald-500" /> Active Safeguard
             </Badge>
           </div>
 
@@ -706,8 +706,8 @@ export default function Settings() {
         <section>
           <div className="flex items-center justify-between mb-3 px-1 mt-8">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">App Security & Safeguards</h2>
-            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-medium">
-              <Shield className="w-3 h-3 mr-1" /> Active Protection
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-medium bg-emerald-500/5 px-2 py-0.5 rounded-full">
+              <ShieldCheck className="w-3 h-3 mr-1 text-emerald-500" /> Active Safeguard
             </Badge>
           </div>
           <div className="bg-card rounded-2xl border shadow-sm p-4 space-y-3">

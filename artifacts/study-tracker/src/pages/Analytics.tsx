@@ -313,28 +313,61 @@ export default function Analytics() {
   const studyRecommendation = useMemo(() => {
     if (systems.length === 0) return null;
 
-    // 1. Check for highest decay/overdue system
+    // 1. Check for active multi-day revision session
+    const activeMultiDay = systems.find(s => s.revisionState === 'in_progress');
+    if (activeMultiDay) {
+      const subName = subjectMap.get(activeMultiDay.subjectId)?.name ?? 'Subject';
+      const days = activeMultiDay.revisionDaysLogged || 1;
+      const progress = activeMultiDay.revisionProgressPercent || 0;
+      return {
+        system: activeMultiDay,
+        subjectName: subName,
+        title: activeMultiDay.name,
+        reason: `Active multi-day revision in progress (Day ${days} logged, ${progress}% completed) — finish to update memory stability.`,
+        badge: 'Active Multi-Day Session',
+        badgeColor: 'bg-primary/10 text-primary border-primary/30',
+      };
+    }
+
+    // 2. Check for highest decay/priority system that is DUE or WEAK
     const sortedByDecay = sortSystemsByRevisionPriority(systems);
     const topVulnerable = sortedByDecay.length > 0 ? sortedByDecay[0] : null;
 
-    if (topVulnerable && (calculateDecayScore(topVulnerable) > 0 || topVulnerable.status === 'Weak')) {
+    if (topVulnerable && (isRevisionDue(topVulnerable) || topVulnerable.status === 'Weak')) {
       const subName = subjectMap.get(topVulnerable.subjectId)?.name ?? 'Subject';
       const overdue = daysOverdue(topVulnerable);
-      const reason = overdue > 0
-        ? `Overdue by ${overdue} day${overdue !== 1 ? 's' : ''} with ${topVulnerable.status} confidence.`
-        : `Marked with ${topVulnerable.status} confidence — needs active recall review.`;
+      const isDueToday = isRevisionDue(topVulnerable) && overdue === 0;
+
+      let reason = '';
+      let badge = '';
+      let badgeColor = '';
+
+      if (overdue > 0) {
+        reason = `Overdue by ${overdue} day${overdue !== 1 ? 's' : ''} with ${topVulnerable.status} confidence.`;
+        badge = 'Overdue Revision';
+        badgeColor = 'bg-destructive/10 text-destructive border-destructive/30';
+      } else if (isDueToday) {
+        reason = `Revision due today with ${topVulnerable.status} confidence.`;
+        badge = 'Due Today';
+        badgeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
+      } else {
+        // Weak confidence
+        reason = `Marked with Weak confidence — active recall review recommended.`;
+        badge = 'Weak Confidence';
+        badgeColor = 'bg-rose-500/10 text-rose-500 border-rose-500/30';
+      }
 
       return {
         system: topVulnerable,
         subjectName: subName,
         title: topVulnerable.name,
         reason,
-        badge: topVulnerable.status === 'Weak' ? 'Weak Confidence' : 'Overdue Revision',
-        badgeColor: 'bg-destructive/10 text-destructive border-destructive/30',
+        badge,
+        badgeColor,
       };
     }
 
-    // 2. Check for system with lowest test average score if score logs exist
+    // 3. Check for system with lowest test average score if score logs exist (< 70%)
     if (systemBreakdownData.length > 0) {
       const lowestSysData = [...systemBreakdownData].sort((a, b) => a.average - b.average)[0];
       if (lowestSysData && lowestSysData.average < 70) {
@@ -541,27 +574,34 @@ export default function Analytics() {
               {complianceMetrics.totalScheduled === 0 ? (
                 <div className="w-full bg-muted-foreground/20 rounded-full" />
               ) : (
-                <>
-                  <div
-                    style={{ width: `${(complianceMetrics.onScheduleCount / complianceMetrics.totalScheduled) * 100}%` }}
-                    className="bg-emerald-500 h-full rounded-l-full transition-all duration-500"
-                    title={`${complianceMetrics.onScheduleCount} Systems On Schedule`}
-                  />
-                  {complianceMetrics.dueTodayCount > 0 && (
-                    <div
-                      style={{ width: `${(complianceMetrics.dueTodayCount / complianceMetrics.totalScheduled) * 100}%` }}
-                      className="bg-amber-500 h-full transition-all duration-500"
-                      title={`${complianceMetrics.dueTodayCount} Systems Due Today`}
-                    />
-                  )}
-                  {complianceMetrics.overdueCount > 0 && (
-                    <div
-                      style={{ width: `${(complianceMetrics.overdueCount / complianceMetrics.totalScheduled) * 100}%` }}
-                      className="bg-destructive h-full rounded-r-full transition-all duration-500"
-                      title={`${complianceMetrics.overdueCount} Systems Overdue`}
-                    />
-                  )}
-                </>
+                (() => {
+                  const upcomingCount = Math.max(0, complianceMetrics.onScheduleCount - complianceMetrics.dueTodayCount);
+                  return (
+                    <>
+                      {upcomingCount > 0 && (
+                        <div
+                          style={{ width: `${(upcomingCount / complianceMetrics.totalScheduled) * 100}%` }}
+                          className="bg-emerald-500 h-full transition-all duration-500"
+                          title={`${upcomingCount} Systems Upcoming (On Schedule)`}
+                        />
+                      )}
+                      {complianceMetrics.dueTodayCount > 0 && (
+                        <div
+                          style={{ width: `${(complianceMetrics.dueTodayCount / complianceMetrics.totalScheduled) * 100}%` }}
+                          className="bg-amber-500 h-full transition-all duration-500"
+                          title={`${complianceMetrics.dueTodayCount} Systems Due Today`}
+                        />
+                      )}
+                      {complianceMetrics.overdueCount > 0 && (
+                        <div
+                          style={{ width: `${(complianceMetrics.overdueCount / complianceMetrics.totalScheduled) * 100}%` }}
+                          className="bg-destructive h-full transition-all duration-500"
+                          title={`${complianceMetrics.overdueCount} Systems Overdue`}
+                        />
+                      )}
+                    </>
+                  );
+                })()
               )}
             </div>
 
