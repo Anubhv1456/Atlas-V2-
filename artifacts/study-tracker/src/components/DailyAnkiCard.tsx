@@ -90,7 +90,7 @@ export function DailyAnkiCard({ subjects: _subjects, systems, className }: Daily
                   <Check className="w-3 h-3" /> Daily repetition pass completed
                 </span>
               ) : (
-                <span>Target deck: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px] text-foreground">{masterDeckLabel}</code></span>
+                <span>Complete your daily flashcard reviews in Anki</span>
               )}
             </p>
           </div>
