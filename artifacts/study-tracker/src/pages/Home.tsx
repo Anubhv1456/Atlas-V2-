@@ -462,7 +462,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-36 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="relative z-10 flex-1 flex flex-col">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="mb-8 flex items-center justify-between">

@@ -145,16 +145,7 @@ export const initAuth = (
     authStateListener(user, token || '');
   }
 
-  setupTokenClient().then(() => {
-    // If we have a user but token is expired or missing, try silent token prompt
-    if (user && !token && tokenClient) {
-      try {
-        tokenClient.requestAccessToken({ prompt: '' });
-      } catch {
-        // Silent request failed; user can re-auth when backing up
-      }
-    }
-  });
+  setupTokenClient();
 
   return () => {
     authStateListener = null;
@@ -220,32 +211,7 @@ export const getAccessToken = async (): Promise<string | null> => {
   if (accessToken && tokenExpiry > Date.now()) {
     return accessToken;
   }
-
-  // If we have currentUser but token is expired or missing, try requesting silently
-  if (currentUser && tokenClient) {
-    return new Promise((resolve) => {
-      const prevCallback = tokenClient.callback;
-      tokenClient.callback = (response: any) => {
-        tokenClient.callback = prevCallback;
-        if (response && response.access_token) {
-          const token = response.access_token;
-          const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
-          saveSession(currentUser, token, expiresIn);
-          resolve(token);
-        } else {
-          resolve(null);
-        }
-      };
-      try {
-        tokenClient.requestAccessToken({ prompt: '' });
-      } catch {
-        tokenClient.callback = prevCallback;
-        resolve(null);
-      }
-    });
-  }
-
-  return accessToken;
+  return null;
 };
 
 // ── Google Drive API Backup Logic ───────────────────────────────────────────────
