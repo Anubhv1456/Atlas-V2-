@@ -4,6 +4,7 @@ export interface Subject {
   id?: number;
   name: string;
   order?: number;
+  focus?: 'primary' | 'secondary' | null;
   createdAt: Date;
   updatedAt: Date;
 }

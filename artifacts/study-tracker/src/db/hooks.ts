@@ -154,9 +154,12 @@ export async function updateSystemsOrder(updates: { id: number; order: number }[
 
 /** Set focus mode for a system, ensuring only one primary and one secondary exist at a time. */
 export async function setFocus(id: number, focus: 'primary' | 'secondary' | null) {
-  return await db.transaction('rw', db.systems, async () => {
+  return await db.transaction('rw', db.subjects, db.systems, async () => {
     if (focus) {
-      // Find and unset any existing system with this focus
+      const existingSubjects = await db.subjects.filter(s => s.focus === focus).toArray();
+      for (const sub of existingSubjects) {
+        await db.subjects.update(sub.id!, { focus: null });
+      }
       const existing = await db.systems.filter(s => s.focus === focus).toArray();
       for (const sys of existing) {
         if (sys.id !== id) {
@@ -165,6 +168,25 @@ export async function setFocus(id: number, focus: 'primary' | 'secondary' | null
       }
     }
     await db.systems.update(id, { focus, updatedAt: new Date() });
+  });
+}
+
+/** Set focus mode for a subject, unsetting any other subject or system with that focus type. */
+export async function setSubjectFocus(subjectId: number, focus: 'primary' | 'secondary' | null) {
+  return await db.transaction('rw', db.subjects, db.systems, async () => {
+    if (focus) {
+      const existingSubjects = await db.subjects.filter(s => s.focus === focus).toArray();
+      for (const sub of existingSubjects) {
+        if (sub.id !== subjectId) {
+          await db.subjects.update(sub.id!, { focus: null });
+        }
+      }
+      const existingSystems = await db.systems.filter(s => s.focus === focus).toArray();
+      for (const sys of existingSystems) {
+        await db.systems.update(sys.id!, { focus: null });
+      }
+    }
+    await db.subjects.update(subjectId, { focus, updatedAt: new Date() });
   });
 }
 

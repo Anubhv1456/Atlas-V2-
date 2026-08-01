@@ -57,8 +57,14 @@ export function CommandPalette() {
       }
     };
 
+    const handleOpenCustom = () => setOpen(true);
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('open-command-palette', handleOpenCustom);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-command-palette', handleOpenCustom);
+    };
   }, []);
 
   const results = useMemo(() => {

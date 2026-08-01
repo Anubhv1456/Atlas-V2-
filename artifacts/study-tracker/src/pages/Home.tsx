@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { useSubjects, useAllSystems, addSubject, updateSubject, deleteSubject, useCurrentStreak, setFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
+import { useSubjects, useAllSystems, addSubject, updateSubject, deleteSubject, useCurrentStreak, setFocus, setSubjectFocus, updateSubjectsOrder, useAllPYQs } from '@/db/hooks';
 import { SubjectCard } from '@/components/SubjectCard';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
@@ -99,30 +99,6 @@ export default function Home() {
     await updateSubjectsOrder(updates);
   };
 
-  // Search state
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery]           = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const openSearch = () => {
-    setSearchOpen(true);
-    // tiny delay so the input is mounted before we focus
-    setTimeout(() => inputRef.current?.focus(), 40);
-  };
-
-  const closeSearch = () => {
-    setSearchOpen(false);
-    setQuery('');
-  };
-
-  // Live search results
-  const results = useMemo(
-    () => runSearch(query, subjects, systems),
-    [query, subjects, systems],
-  );
-
-  const hasQuery   = query.trim().length > 0;
-  const noResults  = hasQuery && results.subjects.length === 0 && results.systems.length === 0;
 
   // ── Overall Stats & Greetings ───────────────────────────────────────────────────
   const totalTasks = systems.length * 2;
@@ -143,8 +119,11 @@ export default function Home() {
 
   const [focusDialogType, setFocusDialogType] = useState<'primary' | 'secondary' | null>(null);
 
-  let primaryFocus = systems.find(s => s.focus === 'primary');
-  let isAutoPrimary = false;
+  const customPrimarySubject = subjects.find(s => s.focus === 'primary');
+  const customPrimarySystem = systems.find(s => s.focus === 'primary');
+
+  const customSecondarySubject = subjects.find(s => s.focus === 'secondary');
+  const customSecondarySystem = systems.find(s => s.focus === 'secondary');
 
   const now = new Date();
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -167,8 +146,23 @@ export default function Home() {
   const sortedSystemsByPriority = [...systems].sort(sortSystemsByPriority);
   const incompleteSystems = sortedSystemsByPriority.filter(s => !(s.contentCompleted && s.qbankDone));
 
-  if (!primaryFocus && incompleteSystems.length > 0) {
+  let primaryFocus: StudySystem | undefined = undefined;
+  let primaryFocusSubject: Subject | undefined = undefined;
+  let isAutoPrimary = false;
+
+  if (customPrimarySubject) {
+    primaryFocusSubject = customPrimarySubject;
+    const subSystems = sortedSystemsByPriority.filter(s => s.subjectId === customPrimarySubject.id);
+    const subIncomplete = subSystems.filter(s => !(s.contentCompleted && s.qbankDone));
+    primaryFocus = subIncomplete[0] || subSystems[0];
+    isAutoPrimary = false;
+  } else if (customPrimarySystem) {
+    primaryFocus = customPrimarySystem;
+    primaryFocusSubject = subjects.find(s => s.id === customPrimarySystem.subjectId);
+    isAutoPrimary = false;
+  } else if (incompleteSystems.length > 0) {
     primaryFocus = incompleteSystems[0];
+    primaryFocusSubject = subjects.find(s => s.id === primaryFocus.subjectId);
     isAutoPrimary = true;
   }
 
@@ -186,8 +180,8 @@ export default function Home() {
   // Highest priority revision sorted strictly by Knowledge Decay factor & overdue duration
   const dueRevisions = sortSystemsByRevisionPriority(unsortedDueRevisions, now);
 
-  let customSecondary = systems.find(s => s.focus === 'secondary');
   let secondaryFocus: StudySystem | undefined = undefined;
+  let secondaryFocusSubject: Subject | undefined = undefined;
   let isSecondaryOverriddenByRevision = false;
   let isAutoSecondary = false;
 
@@ -195,16 +189,25 @@ export default function Home() {
 
   if (activeMultiDaySystem) {
     secondaryFocus = activeMultiDaySystem;
+    secondaryFocusSubject = subjects.find(s => s.id === activeMultiDaySystem.subjectId);
     isSecondaryOverriddenByRevision = true;
     isAutoSecondary = false;
   } else if (dueRevisions.length > 0) {
     // Active revisions override secondary focus and suspend custom selection until completed
     secondaryFocus = dueRevisions[0];
+    secondaryFocusSubject = subjects.find(s => s.id === secondaryFocus.subjectId);
     isSecondaryOverriddenByRevision = true;
     isAutoSecondary = true;
-  } else if (customSecondary) {
-    // Custom user-selected secondary focus
-    secondaryFocus = customSecondary;
+  } else if (customSecondarySubject) {
+    secondaryFocusSubject = customSecondarySubject;
+    const subSystems = sortedSystemsByPriority.filter(s => s.subjectId === customSecondarySubject.id);
+    const subIncomplete = subSystems.filter(s => !(s.contentCompleted && s.qbankDone));
+    secondaryFocus = subIncomplete[0] || subSystems[0];
+    isSecondaryOverriddenByRevision = false;
+    isAutoSecondary = false;
+  } else if (customSecondarySystem) {
+    secondaryFocus = customSecondarySystem;
+    secondaryFocusSubject = subjects.find(s => s.id === customSecondarySystem.subjectId);
     isSecondaryOverriddenByRevision = false;
     isAutoSecondary = false;
   } else {
@@ -212,6 +215,7 @@ export default function Home() {
     const remainingIncomplete = incompleteSystems.filter(s => s.id !== primaryFocus?.id);
     if (remainingIncomplete.length > 0) {
       secondaryFocus = remainingIncomplete[0];
+      secondaryFocusSubject = subjects.find(s => s.id === secondaryFocus.subjectId);
       isAutoSecondary = true;
       isSecondaryOverriddenByRevision = false;
     }
@@ -244,6 +248,28 @@ export default function Home() {
 
     const candidates: Insight[] = [];
     const now = new Date();
+
+    // 0. SUBJECT FOCUS STRATEGY (Priority Confidence: 96)
+    if (customPrimarySubject || customSecondarySubject) {
+      const activeFocusedSub = customPrimarySubject || customSecondarySubject;
+      const subSystems = systems.filter(s => s.subjectId === activeFocusedSub?.id);
+      const subIncomplete = subSystems.filter(s => !(s.contentCompleted && s.qbankDone));
+      
+      candidates.push({
+        id: `subject-focus-${activeFocusedSub?.id}`,
+        confidence: 96,
+        badge: customPrimarySubject ? 'PRIMARY SUBJECT FOCUS' : 'SECONDARY SUBJECT FOCUS',
+        badgeClass: 'bg-primary/10 text-primary border-primary/20',
+        icon: <BookOpen className="w-4 h-4 text-primary shrink-0" />,
+        text: (
+          <span>
+            <strong className="text-foreground">{activeFocusedSub?.name}</strong> is set as your focus subject ({subIncomplete.length} of {subSystems.length} topics remaining). Next topic: <strong className="text-foreground">{primaryFocus?.name || 'Subject Completed!'}</strong>.
+          </span>
+        ),
+        actionLabel: 'Open Subject',
+        onAction: () => setLocation(`/subjects/${activeFocusedSub?.id}`),
+      });
+    }
 
     // 1. KNOWLEDGE DECAY & REVISION DEBT (Highest Priority: 98-100)
     const sortedByDecay = sortSystemsByRevisionPriority(systems, now);
@@ -415,7 +441,7 @@ export default function Home() {
 
     candidates.sort((a, b) => b.confidence - a.confidence);
     return candidates.slice(0, 2);
-  }, [systems, subjects, pyqs, primaryFocus, streak, setLocation]);
+  }, [systems, subjects, pyqs, primaryFocus, customPrimarySubject, customSecondarySubject, streak, setLocation]);
 
   const handleSetFocus = (systemId: number) => {
     if (focusDialogType) {
@@ -435,14 +461,12 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <>
+      <div className="min-h-[100dvh] bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="relative z-10 flex-1 flex flex-col">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="mb-8 flex items-center justify-between">
-          <div className={cn(
-            'transition-all duration-300 flex items-center gap-3.5',
-            searchOpen ? 'opacity-0 scale-95 pointer-events-none w-0 overflow-hidden' : 'opacity-100 scale-100'
-          )}>
+          <div className="flex items-center gap-3.5">
             <img src="/logo.svg?v=4" alt="Atlas Logo" className="w-12 h-12 rounded-[14px] shadow-sm border border-border/50 object-contain transition-transform hover:scale-105 active:scale-95" />
             <div>
               <div className="flex items-center gap-1.5 text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">
@@ -452,111 +476,20 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Search input — shown when open */}
-          <div className={cn(
-            'transition-all duration-300 flex-1 flex justify-end',
-            searchOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
-          )}>
-            <div className="relative w-full max-w-sm">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <input
-                ref={inputRef}
-                type="search"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
-                placeholder="Search subjects, systems, or tags..."
-                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl bg-card border border-border focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-sans text-foreground shadow-sm"
-              />
-            </div>
-          </div>
-
-          {/* Icon toggle with shortcut indicator */}
+          {/* Quick Search trigger opening CommandPalette */}
           <button
-            onClick={searchOpen ? closeSearch : openSearch}
-            className="ml-3 shrink-0 h-10 px-3 rounded-xl border border-border/60 bg-card flex items-center gap-2 hover:bg-muted/50 transition-colors text-muted-foreground shadow-sm"
-            aria-label={searchOpen ? 'Close search' : 'Open search'}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-command-palette'))}
+            className="shrink-0 h-10 px-3.5 rounded-xl border border-border/80 bg-card hover:bg-muted/60 active:scale-95 transition-all text-muted-foreground shadow-sm flex items-center gap-2 group cursor-pointer"
+            aria-label="Open search"
             title="Open Quick Search (⌘K or /)"
           >
-            {searchOpen ? (
-              <X className="w-5 h-5" />
-            ) : (
-              <>
-                <SearchIcon className="w-4 h-4" />
-                <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/60">
-                  <span className="text-[9px]">⌘</span>K
-                </kbd>
-              </>
-            )}
+            <SearchIcon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span className="hidden sm:inline text-xs font-medium text-muted-foreground group-hover:text-foreground">Search...</span>
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/60">
+              <span className="text-[9px]">⌘</span>K
+            </kbd>
           </button>
         </header>
-
-        {/* ── Search results ─────────────────────────────────────────────────── */}
-        {searchOpen ? (
-          <div className="space-y-6 flex-1">
-            {!hasQuery && (
-              <div className="text-center py-16 text-muted-foreground">
-                <p className="text-sm">Search subjects, systems, or status...</p>
-              </div>
-            )}
-
-            {noResults && (
-              <div className="text-center py-16 text-muted-foreground">
-                <p className="font-medium">No results found.</p>
-              </div>
-            )}
-
-            {/* Subject results */}
-            {results.subjects.length > 0 && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                  <BookOpen className="w-3.5 h-3.5" /> Subjects
-                </h3>
-                <div className="bg-card rounded-xl border border-border overflow-hidden divide-y divide-border">
-                  {results.subjects.map(sub => (
-                    <button
-                      key={sub.id}
-                      onClick={() => goToSubject(sub.id!)}
-                      className="w-full p-4 hover:bg-muted/30 transition-colors flex items-center justify-between text-left group"
-                    >
-                      <span className="font-medium text-foreground">{sub.name}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* System results */}
-            {results.systems.length > 0 && (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                  <Layers className="w-3.5 h-3.5" /> Systems
-                </h3>
-                <div className="bg-card rounded-xl border border-border overflow-hidden divide-y divide-border">
-                  {results.systems.map(sys => (
-                    <button
-                      key={sys.id}
-                      onClick={() => goToSystem(sys.subjectId, sys.id!)}
-                      className="w-full p-4 hover:bg-muted/30 transition-colors flex items-center gap-3 text-left group"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">{sys.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{sys.subjectName}</p>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <StatusBadge sys={sys} />
-                        <RevisionPill sys={sys} />
-                        <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        ) : (
-          <>
             {/* ── KPI Overview Grid ────────────────────────────────────────────── */}
             <section className="mb-8">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -638,35 +571,64 @@ export default function Home() {
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-2 gap-1">
                       <p className="text-[10px] uppercase tracking-wider text-primary font-semibold flex items-center gap-1.5 truncate">
-                        {isAutoPrimary ? (
+                        {customPrimarySubject ? (
+                          <><BookOpen className="w-3 h-3 shrink-0" /> {customPrimarySubject.name}</>
+                        ) : isAutoPrimary ? (
                           <><Target className="w-3 h-3 shrink-0" /> Recommended Focus</>
                         ) : (
                           "Primary Focus"
                         )}
                       </p>
-                      {primaryFocus && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          {!isAutoPrimary ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {customPrimarySubject ? (
+                          <>
                             <button
-                              onClick={() => setFocus(primaryFocus.id!, null)}
+                              onClick={() => setFocusDialogType('primary')}
+                              className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted/50"
+                              title="Edit primary focus"
+                              aria-label="Edit primary focus"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setSubjectFocus(customPrimarySubject.id!, null)}
                               className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
                               title="Remove custom primary focus"
                               aria-label="Remove custom primary focus"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
+                          </>
+                        ) : customPrimarySystem ? (
+                          <>
                             <button
                               onClick={() => setFocusDialogType('primary')}
                               className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted/50"
-                              title="Customize primary focus"
-                              aria-label="Customize primary focus"
+                              title="Edit primary focus"
+                              aria-label="Edit primary focus"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </div>
-                      )}
+                            <button
+                              onClick={() => setFocus(customPrimarySystem.id!, null)}
+                              className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
+                              title="Remove custom primary focus"
+                              aria-label="Remove custom primary focus"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setFocusDialogType('primary')}
+                            className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-md hover:bg-muted/50"
+                            title="Customize primary focus"
+                            aria-label="Customize primary focus"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {primaryFocus ? (
                       <button onClick={() => goToSystem(primaryFocus.subjectId, primaryFocus.id!)} className="text-left group w-full">
@@ -674,7 +636,7 @@ export default function Home() {
                           {primaryFocus.name}
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                          {subjects.find(s => s.id === primaryFocus.subjectId)?.name}
+                          {customPrimarySubject ? `Subject: ${customPrimarySubject.name}` : subjects.find(s => s.id === primaryFocus.subjectId)?.name}
                         </p>
                       </button>
                     ) : (
@@ -682,7 +644,7 @@ export default function Home() {
                         onClick={() => setFocusDialogType('primary')}
                         className="w-full py-3 mt-1 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 transition-all flex items-center justify-center gap-2 font-medium"
                       >
-                        <Plus className="w-3 h-3" /> Select System
+                        <Plus className="w-3 h-3" /> Select Focus
                       </button>
                     )}
                   </div>
@@ -708,37 +670,66 @@ export default function Home() {
                           <><Clock className="w-3 h-3 shrink-0 text-sky-500" /> Active Multi-Day Revision</>
                         ) : isSecondaryOverriddenByRevision ? (
                           <><Clock className="w-3 h-3 shrink-0" /> Secondary Focus</>
+                        ) : customSecondarySubject ? (
+                          <><BookOpen className="w-3 h-3 shrink-0" /> {customSecondarySubject.name}</>
                         ) : (
                           <><Target className="w-3 h-3 shrink-0" /> Secondary Focus</>
                         )}
                       </p>
 
-                      {secondaryFocus && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          {/* When customization is suspended due to revision, X disappears completely */}
-                          {!isSecondaryOverriddenByRevision && (
-                            !isAutoSecondary ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* When customization is suspended due to revision, edit controls are hidden */}
+                        {!isSecondaryOverriddenByRevision && (
+                          customSecondarySubject ? (
+                            <>
                               <button
-                                onClick={() => setFocus(secondaryFocus.id!, null)}
+                                onClick={() => setFocusDialogType('secondary')}
+                                className="text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors p-1 rounded-md hover:bg-muted/50"
+                                title="Edit secondary focus"
+                                aria-label="Edit secondary focus"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setSubjectFocus(customSecondarySubject.id!, null)}
                                 className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
                                 title="Remove custom secondary focus"
                                 aria-label="Remove custom secondary focus"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
-                            ) : (
+                            </>
+                          ) : customSecondarySystem ? (
+                            <>
                               <button
                                 onClick={() => setFocusDialogType('secondary')}
                                 className="text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors p-1 rounded-md hover:bg-muted/50"
-                                title="Customize secondary focus"
-                                aria-label="Customize secondary focus"
+                                title="Edit secondary focus"
+                                aria-label="Edit secondary focus"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                            )
-                          )}
-                        </div>
-                      )}
+                              <button
+                                onClick={() => setFocus(customSecondarySystem.id!, null)}
+                                className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted/50"
+                                title="Remove custom secondary focus"
+                                aria-label="Remove custom secondary focus"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setFocusDialogType('secondary')}
+                              className="text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors p-1 rounded-md hover:bg-muted/50"
+                              title="Customize secondary focus"
+                              aria-label="Customize secondary focus"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
 
                     {secondaryFocus ? (
@@ -758,7 +749,7 @@ export default function Home() {
                           ) : null}
                         </div>
                         <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                          {subjects.find(s => s.id === secondaryFocus.subjectId)?.name}
+                          {customSecondarySubject ? `Subject: ${customSecondarySubject.name}` : subjects.find(s => s.id === secondaryFocus.subjectId)?.name}
                         </p>
                       </button>
                     ) : (
@@ -766,7 +757,7 @@ export default function Home() {
                         onClick={() => setFocusDialogType('secondary')}
                         className="w-full py-3 mt-1 border border-dashed border-amber-500/30 rounded-xl text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all flex items-center justify-center gap-2 font-medium"
                       >
-                        <Plus className="w-3 h-3" /> Select System
+                        <Plus className="w-3 h-3" /> Select Focus
                       </button>
                     )}
                   </div>
@@ -892,8 +883,7 @@ export default function Home() {
                 <Plus className="w-5 h-5" />
               </button>
             )}
-          </>
-        )}
+      </div>
       </div>
 
       <AddDialog
@@ -907,9 +897,19 @@ export default function Home() {
         open={focusDialogType !== null}
         onOpenChange={(isOpen) => !isOpen && setFocusDialogType(null)}
         title={`Set ${focusDialogType === 'primary' ? 'Primary' : 'Secondary'} Focus`}
+        focusType={focusDialogType}
         systems={systems}
         subjects={subjects}
-        onSelect={handleSetFocus}
+        onSelectSystem={(systemId) => {
+          if (focusDialogType) {
+            setFocus(systemId, focusDialogType);
+          }
+        }}
+        onSelectSubject={(subjectId) => {
+          if (focusDialogType) {
+            setSubjectFocus(subjectId, focusDialogType);
+          }
+        }}
       />
 
       {/* Rename Subject dialog */}
@@ -964,6 +964,6 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

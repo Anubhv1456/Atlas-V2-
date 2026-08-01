@@ -4,7 +4,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
+import { motion } from 'framer-motion';
 
 import { BottomNav } from '@/components/BottomNav';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -35,23 +36,34 @@ const initTheme = () => {
 initTheme();
 
 function Router() {
+  const [location] = useLocation();
+
   return (
     <div className="flex flex-col md:flex-row min-h-[100dvh] w-full">
       <div className="pointer-events-none fixed inset-0 z-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
       <BottomNav />
-      <main className="flex-1 w-full relative z-10">
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/subjects/:id" component={SubjectDetail} />
-          <Route path="/timeline" component={Timeline} />
-          <Route path="/analytics" component={Analytics} />
-          <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
-        </Switch>
-      </main>
+      <div className="flex-1 w-full relative z-10 overflow-x-hidden">
+        <motion.main
+          key={location}
+          initial={{ opacity: 0.8, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12, ease: 'easeOut' }}
+          className="w-full h-full"
+        >
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/subjects/:id" component={SubjectDetail} />
+            <Route path="/timeline" component={Timeline} />
+            <Route path="/analytics" component={Analytics} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </motion.main>
+      </div>
     </div>
   );
 }
+
 
 function App() {
   useEffect(() => {
