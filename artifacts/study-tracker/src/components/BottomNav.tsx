@@ -14,7 +14,10 @@ export function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md h-16 rounded-full border border-border/80 bg-background/80 dark:bg-card/85 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_36px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center justify-around transition-all duration-300">
+    <div 
+      className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md h-16 rounded-full border border-border/80 bg-background/80 dark:bg-card/85 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_36px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center justify-around transition-all duration-300"
+      style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className="relative w-full flex items-center justify-around gap-1">
         {links.map(({ href, icon: Icon, label }) => {
           const isActive = location === href;
