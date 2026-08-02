@@ -153,9 +153,12 @@ export const initAuth = (
   };
 };
 
-export const googleSignIn = async (): Promise<{ user: any; accessToken: string } | null> => {
-  await setupTokenClient();
-  return new Promise((resolve, reject) => {
+export const googleSignIn = (): Promise<{ user: any; accessToken: string } | null> => {
+  return new Promise(async (resolve, reject) => {
+    if (!tokenClient) {
+      await setupTokenClient();
+    }
+    
     if (!tokenClient) {
       reject(new Error('Google Identity Services client failed to load.'));
       return;
@@ -190,7 +193,11 @@ export const googleSignIn = async (): Promise<{ user: any; accessToken: string }
       }
     };
 
-    tokenClient.requestAccessToken({});
+    try {
+      tokenClient.requestAccessToken({ prompt: '' });
+    } catch (err) {
+      reject(err);
+    }
   });
 };
 
