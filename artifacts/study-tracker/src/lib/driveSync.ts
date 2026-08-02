@@ -154,13 +154,9 @@ export const initAuth = (
 };
 
 export const googleSignIn = (): Promise<{ user: any; accessToken: string } | null> => {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     if (!tokenClient) {
-      await setupTokenClient();
-    }
-    
-    if (!tokenClient) {
-      reject(new Error('Google Identity Services client failed to load.'));
+      reject(new Error('Google login is still initializing. Please try again in a moment.'));
       return;
     }
 
@@ -211,6 +207,14 @@ export const googleSignOut = async () => {
   }
   clearSession();
   if (authFailureListener) authFailureListener();
+};
+
+export const getValidTokenSync = (): string | null => {
+  restoreSession();
+  if (accessToken && tokenExpiry > Date.now()) {
+    return accessToken;
+  }
+  return null;
 };
 
 export const getAccessToken = async (): Promise<string | null> => {

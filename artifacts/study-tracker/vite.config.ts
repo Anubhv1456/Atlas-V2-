@@ -15,7 +15,7 @@ export default defineConfig({
       selfDestroying: false,
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo.svg'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifestFilename: 'manifest.json',
       manifest: {
         name: 'Atlas Study Tracker',

@@ -17,7 +17,7 @@ import {
   NotificationSettings,
 } from '@/lib/pwaAndNotifications';
 
-import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken, syncWithDrive } from '@/lib/driveSync';
+import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken, getValidTokenSync, syncWithDrive } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -198,8 +198,17 @@ export default function Settings() {
   };
 
   const handleCloudSync = async () => {
-    const token = await getAccessToken();
-    if (!token) { toast({ title: 'Not authenticated', variant: 'destructive' }); return; }
+    let token = getValidTokenSync();
+    if (!token) {
+      try {
+        const res = await googleSignIn();
+        token = res?.accessToken || null;
+      } catch (e: any) {
+        toast({ title: 'Authentication Required', description: 'Please try signing in again.', variant: 'destructive' });
+        return;
+      }
+    }
+    if (!token) return;
     setSyncing(true);
     try {
       const { stats } = await syncWithDrive(token);
@@ -219,8 +228,17 @@ export default function Settings() {
 
   const handleCloudPull = async () => {
     if (!confirm('This will replace your local data with the cloud backup. Are you sure?')) return;
-    const token = await getAccessToken();
-    if (!token) { toast({ title: 'Not authenticated', variant: 'destructive' }); return; }
+    let token = getValidTokenSync();
+    if (!token) {
+      try {
+        const res = await googleSignIn();
+        token = res?.accessToken || null;
+      } catch (e: any) {
+        toast({ title: 'Authentication Required', description: 'Please try signing in again.', variant: 'destructive' });
+        return;
+      }
+    }
+    if (!token) return;
     setSyncing(true);
     try {
       await downloadFromDrive(token);
