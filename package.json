@@ -22,7 +22,8 @@
     "@replit/connectors-sdk": "^0.4.1",
     "@tanstack/react-virtual": "^3.14.9",
     "canvas-confetti": "^1.9.4",
-    "firebase": "^12.16.0"
+    "firebase": "^12.16.0",
+    "workbox-window": "^7.4.1"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

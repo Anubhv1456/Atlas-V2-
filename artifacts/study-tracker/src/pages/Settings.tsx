@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers, Lock, KeyRound, Shield, Smartphone, Bell, Download, Check } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers, Lock, KeyRound, Shield, Smartphone, Bell, Download, Check, ExternalLink, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -90,6 +90,7 @@ export default function Settings() {
   // PWA & Notification states
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(getNotificationSettings());
   const [canInstallPwa, setCanInstallPwa] = useState<boolean>(isPwaInstallable());
+  const [showInstallGuideModal, setShowInstallGuideModal] = useState<boolean>(false);
   const [isStandalone, setIsStandalone] = useState<boolean>(
     typeof window !== 'undefined' &&
       (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true)
@@ -147,10 +148,14 @@ export default function Settings() {
   };
 
   const handlePwaInstallClick = async () => {
-    const success = await promptPwaInstall();
-    if (success) {
-      toast({ title: 'PWA Installed! 🎉', description: 'Atlas is now added to your home screen.' });
+    if (canInstallPwa || isPwaInstallable()) {
+      const success = await promptPwaInstall();
+      if (success) {
+        toast({ title: 'PWA Installed! 🎉', description: 'Atlas is now added to your home screen.' });
+        return;
+      }
     }
+    setShowInstallGuideModal(true);
   };
 
 
@@ -589,11 +594,10 @@ export default function Settings() {
                 <Button
                   size="sm"
                   onClick={handlePwaInstallClick}
-                  disabled={!canInstallPwa}
-                  className="gap-1.5 text-xs font-semibold"
+                  className="gap-1.5 text-xs font-semibold shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  {canInstallPwa ? 'Install App' : 'App Ready'}
+                  Install App
                 </Button>
               )}
             </div>
@@ -1237,6 +1241,81 @@ export default function Settings() {
               disabled={decryptingImport || !importPassphrase}
             >
               {decryptingImport ? 'Decrypting…' : 'Unlock Backup'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Install App Guide Dialog ────────────────────────────── */}
+      <Dialog open={showInstallGuideModal} onOpenChange={setShowInstallGuideModal}>
+        <DialogContent className="sm:max-w-[480px] rounded-2xl mx-4 w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="mx-auto w-12 h-12 bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center mb-2">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-center text-xl font-bold">Install Atlas App</DialogTitle>
+            <DialogDescription className="text-center text-xs pt-1">
+              Add Atlas to your home screen or desktop for fast offline access and app performance.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* If in iframe preview notice */}
+            {typeof window !== 'undefined' && window.self !== window.top && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
+                <div className="font-semibold text-amber-500 flex items-center gap-1.5">
+                  <ExternalLink className="w-4 h-4" /> Preview Window Detected
+                </div>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Browser security prevents direct app installation from inside preview windows. Click below to open Atlas in its own tab, where you can install it in one click!
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full gap-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open Atlas in New Tab
+                </Button>
+              </div>
+            )}
+
+            {/* Desktop / Chrome / Edge */}
+            <div className="p-3 bg-muted/40 rounded-xl space-y-1.5 border">
+              <div className="font-semibold text-foreground flex items-center gap-2">
+                <Monitor className="w-4 h-4 text-indigo-500" /> Desktop (Chrome, Edge, Brave)
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Click the <span className="font-medium text-foreground">Install icon (⬇️ or ⊕)</span> on the right side of your browser address bar, or click Menu (⋮) &rarr; <span className="font-medium text-foreground">Install Atlas App</span>.
+              </p>
+            </div>
+
+            {/* iPhone / iPad (Safari) */}
+            <div className="p-3 bg-muted/40 rounded-xl space-y-1.5 border">
+              <div className="font-semibold text-foreground flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-sky-500" /> iPhone & iPad (Safari)
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Tap the <span className="font-medium text-foreground">Share button</span> (bottom toolbar) &rarr; Scroll down &rarr; Tap <span className="font-medium text-foreground">Add to Home Screen</span>.
+              </p>
+            </div>
+
+            {/* Android (Chrome) */}
+            <div className="p-3 bg-muted/40 rounded-xl space-y-1.5 border">
+              <div className="font-semibold text-foreground flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-500" /> Android (Chrome)
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Tap the <span className="font-medium text-foreground">Menu button (⋮)</span> in top right &rarr; Tap <span className="font-medium text-foreground">Install App</span> or <span className="font-medium text-foreground">Add to Home screen</span>.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button
+              className="w-full rounded-xl font-semibold"
+              onClick={() => setShowInstallGuideModal(false)}
+            >
+              Got It
             </Button>
           </DialogFooter>
         </DialogContent>

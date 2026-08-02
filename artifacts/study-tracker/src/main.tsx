@@ -1,8 +1,12 @@
 import { createRoot } from 'react-dom/client';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { registerSW } from 'virtual:pwa-register';
 
 import App from './App';
 import './index.css';
+
+// Register PWA service worker with auto-update
+registerSW({ immediate: true });
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: ReactNode }) {
