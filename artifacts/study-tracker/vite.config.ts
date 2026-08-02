@@ -13,7 +13,7 @@ function bundleObfuscatorPlugin(): Plugin {
     apply: 'build',
     enforce: 'post',
     renderChunk(code, chunk) {
-      if (!chunk.fileName.endsWith('.js')) {
+      if (!chunk.fileName.endsWith('.js') || chunk.fileName.includes('sw') || chunk.fileName.includes('workbox') || chunk.fileName.includes('register')) {
         return null;
       }
 
