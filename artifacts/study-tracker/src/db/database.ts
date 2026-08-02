@@ -465,8 +465,8 @@ export async function importData(data: {
       await db.subjects.bulkAdd(
         data.subjects.map(s => ({
           ...s,
-          createdAt: new Date(s.createdAt),
-          updatedAt: new Date(s.updatedAt),
+          createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+          updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
         })),
       );
     }
@@ -474,7 +474,7 @@ export async function importData(data: {
     if (data.systems?.length) {
       await db.systems.bulkAdd(
         data.systems.map(s => {
-          const base = { ...s, updatedAt: new Date(s.updatedAt) };
+          const base = { ...s, updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date() };
           const old  = s as unknown as Record<string, unknown>;
           if (typeof old['contentDone'] === 'boolean' && !('contentInitialized' in s)) {
             const wasDone = Boolean(old['contentDone']);
@@ -507,7 +507,7 @@ export async function importData(data: {
 
     if (data.history?.length) {
       await db.history.bulkAdd(
-        data.history.map(h => ({ ...h, completedAt: new Date(h.completedAt) })),
+        data.history.map(h => ({ ...h, completedAt: h.completedAt ? new Date(h.completedAt) : new Date() })),
       );
     }
 
@@ -515,7 +515,7 @@ export async function importData(data: {
       await db.pyqYears.bulkAdd(
         data.pyqYears.map(p => ({
           ...p,
-          createdAt:   new Date(p.createdAt),
+          createdAt:   p.createdAt ? new Date(p.createdAt) : new Date(),
           completedAt: p.completedAt ? new Date(p.completedAt) : null,
         })),
       );
@@ -525,7 +525,7 @@ export async function importData(data: {
       await db.scoreLogs.bulkAdd(
         data.scoreLogs.map(sl => ({
           ...sl,
-          timestamp: new Date(sl.timestamp),
+          timestamp: sl.timestamp ? new Date(sl.timestamp) : new Date(),
         })),
       );
     }

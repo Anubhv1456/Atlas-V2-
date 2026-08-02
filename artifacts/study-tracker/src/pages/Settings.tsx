@@ -132,6 +132,27 @@ export default function Settings() {
   };
 
   const handleTestNotification = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          toast({
+            title: 'Permission Denied 🔔',
+            description: 'Please enable notifications in Android / Chrome site settings for Atlas.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    } else {
+      toast({
+        title: 'Not Supported',
+        description: 'Notifications are not supported on this browser/device.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const sent = await triggerSpacedRepetitionNotification(true);
     if (sent) {
       toast({
@@ -141,7 +162,7 @@ export default function Settings() {
     } else {
       toast({
         title: 'Notification Not Sent',
-        description: 'Ensure notification permissions are granted in your browser.',
+        description: 'Ensure notification permissions are enabled in Android App Settings for Chrome / Atlas.',
         variant: 'destructive',
       });
     }

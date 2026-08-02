@@ -5,8 +5,19 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './index.css';
 
-// Register PWA service worker with auto-update
-registerSW({ immediate: true });
+// Register PWA service worker with auto-update only in production builds
+if (import.meta.env.PROD) {
+  try {
+    registerSW({
+      immediate: true,
+      onRegisterError(error) {
+        console.warn('PWA service worker registration suppressed:', error);
+      },
+    });
+  } catch (err) {
+    console.warn('PWA registerSW call failed:', err);
+  }
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: ReactNode }) {

@@ -75,13 +75,20 @@ export async function getDueSpacedRepetitionTasks(): Promise<{
  */
 export async function triggerSpacedRepetitionNotification(force = false): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.warn('Notifications not supported in this browser.');
+    console.warn('Notifications not supported in this environment.');
     return false;
   }
 
-  if (Notification.permission !== 'granted') {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return false;
+  try {
+    if (Notification.permission === 'denied') return false;
+    if (Notification.permission !== 'granted') {
+      if (!force) return false;
+      const perm = await Notification.requestPermission().catch(() => 'denied');
+      if (perm !== 'granted') return false;
+    }
+  } catch (err) {
+    console.warn('Notification permission check suppressed:', err);
+    return false;
   }
 
   const settings = getNotificationSettings();
@@ -112,36 +119,68 @@ export async function triggerSpacedRepetitionNotification(force = false): Promis
     ? `Pending: ${messages.join(' | ')}. Keep up your streak!`
     : 'All caught up! Tap to review your study analytics.';
 
+  // 1. Primary approach for Mobile Chrome / PWA / Android: ServiceWorkerRegistration.showNotification
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.ready;
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) {
+        registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1500))
+        ]);
+      }
+
+      if (!registration) {
+        try {
+          registration = await navigator.serviceWorker.register('/sw.js');
+        } catch (regErr) {
+          console.warn('Failed to register fallback sw.js:', regErr);
+        }
+      }
+
       if (registration && registration.showNotification) {
-        await registration.showNotification(title, {
-          body,
-          icon: '/logo.svg',
-          badge: '/logo.svg',
-          tag: 'atlas-spaced-repetition',
-        });
-        saveNotificationSettings({ lastNotifiedDate: todayStr });
-        return true;
+        try {
+          await registration.showNotification(title, {
+            body,
+            icon: '/pwa-192x192.png',
+            badge: '/pwa-192x192.png',
+            tag: 'atlas-spaced-repetition',
+            vibrate: [200, 100, 200],
+          } as NotificationOptions);
+          saveNotificationSettings({ lastNotifiedDate: todayStr });
+          return true;
+        } catch (iconError) {
+          console.warn('showNotification failed with icon, retrying without icon:', iconError);
+          await registration.showNotification(title, {
+            body,
+            tag: 'atlas-spaced-repetition',
+            vibrate: [200, 100, 200],
+          } as NotificationOptions);
+          saveNotificationSettings({ lastNotifiedDate: todayStr });
+          return true;
+        }
       }
     } catch (e) {
-      console.warn('Service worker notification failed, attempting Notification fallback', e);
+      console.warn('Service worker showNotification failed:', e);
     }
   }
 
+  // 2. Fallback for Desktop browsers where new Notification() constructor is allowed
   try {
-    new Notification(title, {
-      body,
-      icon: '/logo.svg',
-      tag: 'atlas-spaced-repetition',
-    });
-    saveNotificationSettings({ lastNotifiedDate: todayStr });
-    return true;
+    if (typeof Notification === 'function') {
+      new Notification(title, {
+        body,
+        icon: '/pwa-192x192.png',
+        tag: 'atlas-spaced-repetition',
+      });
+      saveNotificationSettings({ lastNotifiedDate: todayStr });
+      return true;
+    }
   } catch (e) {
-    console.warn('Direct Notification constructor failed or is restricted on this platform:', e);
+    console.warn('Direct Notification constructor unavailable or restricted on this browser:', e);
     return false;
   }
+  return false;
 }
 
 /**

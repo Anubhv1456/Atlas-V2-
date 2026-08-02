@@ -28,16 +28,20 @@
     <meta name="apple-mobile-web-app-title" content="Atlas">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/logo.svg">
-    <link rel="apple-touch-icon" href="/logo.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   </head>
   <body>
     <div id="root"></div>
     <script>
       window.addEventListener('error', function(e) {
-        document.body.innerHTML += '<div style="color:red; background:white; position:absolute; top:0; z-index:9999; padding:20px;">' + e.message + '<br>' + e.filename + ':' + e.lineno + '<br><pre>' + (e.error ? e.error.stack : '') + '</pre></div>';
+        if (e && e.message && e.message.indexOf('Script error') !== -1) {
+          // Suppress anonymous cross-origin WebKit error noise
+          return;
+        }
+        console.error('Global window error:', e.error || e.message);
       });
       window.addEventListener('unhandledrejection', function(e) {
-        document.body.innerHTML += '<div style="color:red; background:white; position:absolute; top:0; z-index:9999; padding:20px;">Unhandled Rejection: ' + e.reason + '</div>';
+        console.warn('Unhandled promise rejection:', e.reason);
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>
