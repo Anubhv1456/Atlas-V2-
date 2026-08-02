@@ -71,7 +71,58 @@ export async function getDueSpacedRepetitionTasks(): Promise<{
 }
 
 /**
- * Triggers a local browser notification for due spaced repetition tasks
+ * Helper to dispatch a single browser / SW notification
+ */
+async function dispatchLocalNotification(title: string, options: NotificationOptions): Promise<boolean> {
+  // 1. Primary approach for Mobile Chrome / PWA / Android: ServiceWorkerRegistration.showNotification
+  if ('serviceWorker' in navigator) {
+    try {
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) {
+        registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1500)),
+        ]);
+      }
+
+      if (!registration) {
+        try {
+          registration = await navigator.serviceWorker.register('/sw.js');
+        } catch (regErr) {
+          console.warn('Failed to register fallback sw.js:', regErr);
+        }
+      }
+
+      if (registration && registration.showNotification) {
+        try {
+          await registration.showNotification(title, options);
+          return true;
+        } catch (iconError) {
+          console.warn('showNotification failed with options, retrying without icon:', iconError);
+          const { icon, badge, ...simplified } = options as any;
+          await registration.showNotification(title, simplified);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('Service worker showNotification failed:', e);
+    }
+  }
+
+  // 2. Fallback for Desktop browsers where new Notification() constructor is allowed
+  try {
+    if (typeof Notification === 'function') {
+      new Notification(title, options);
+      return true;
+    }
+  } catch (e) {
+    console.warn('Direct Notification constructor unavailable or restricted on this browser:', e);
+  }
+  return false;
+}
+
+/**
+ * Triggers separate local browser notifications for Anki daily reviews and scheduled system revisions.
  */
 export async function triggerSpacedRepetitionNotification(force = false): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -100,87 +151,65 @@ export async function triggerSpacedRepetitionNotification(force = false): Promis
   }
 
   const tasks = await getDueSpacedRepetitionTasks();
-  if (!tasks.ankiPending && tasks.dueRevisionsCount === 0 && !force) {
-    return false;
-  }
 
-  const messages: string[] = [];
-  if (tasks.ankiPending && settings.notifyAnki) {
-    messages.push('⚡ Anki Daily Review Pass');
-  }
-  if (tasks.dueRevisionsCount > 0 && settings.notifyRevisions) {
-    messages.push(`📖 ${tasks.dueRevisionsCount} Scheduled Revisions (${tasks.dueRevisionNames.join(', ')}${tasks.dueRevisionsCount > 3 ? '...' : ''})`);
-  }
+  const notificationsToSend: Array<{ title: string; body: string; tag: string }> = [];
 
-  if (messages.length === 0 && !force) return false;
-
-  const title = 'Atlas Spaced Repetition Due Today! 🎯';
-  const body = messages.length > 0
-    ? `Pending: ${messages.join(' | ')}. Keep up your streak!`
-    : 'All caught up! Tap to review your study analytics.';
-
-  // 1. Primary approach for Mobile Chrome / PWA / Android: ServiceWorkerRegistration.showNotification
-  if ('serviceWorker' in navigator) {
-    try {
-      let registration = await navigator.serviceWorker.getRegistration();
-      if (!registration) {
-        registration = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1500))
-        ]);
-      }
-
-      if (!registration) {
-        try {
-          registration = await navigator.serviceWorker.register('/sw.js');
-        } catch (regErr) {
-          console.warn('Failed to register fallback sw.js:', regErr);
-        }
-      }
-
-      if (registration && registration.showNotification) {
-        try {
-          await registration.showNotification(title, {
-            body,
-            icon: '/pwa-192x192.png',
-            badge: '/pwa-192x192.png',
-            tag: 'atlas-spaced-repetition',
-            vibrate: [200, 100, 200],
-          } as NotificationOptions);
-          saveNotificationSettings({ lastNotifiedDate: todayStr });
-          return true;
-        } catch (iconError) {
-          console.warn('showNotification failed with icon, retrying without icon:', iconError);
-          await registration.showNotification(title, {
-            body,
-            tag: 'atlas-spaced-repetition',
-            vibrate: [200, 100, 200],
-          } as NotificationOptions);
-          saveNotificationSettings({ lastNotifiedDate: todayStr });
-          return true;
-        }
-      }
-    } catch (e) {
-      console.warn('Service worker showNotification failed:', e);
-    }
-  }
-
-  // 2. Fallback for Desktop browsers where new Notification() constructor is allowed
-  try {
-    if (typeof Notification === 'function') {
-      new Notification(title, {
-        body,
-        icon: '/pwa-192x192.png',
-        tag: 'atlas-spaced-repetition',
+  // 1. Separate Anki Notification
+  if (settings.notifyAnki) {
+    if (tasks.ankiPending) {
+      notificationsToSend.push({
+        title: '⚡ Anki Daily Review Pass',
+        body: "Today's Anki flashcard review is pending. Tap to launch your decks and maintain your streak!",
+        tag: 'atlas-anki-notification',
       });
-      saveNotificationSettings({ lastNotifiedDate: todayStr });
-      return true;
+    } else if (force) {
+      notificationsToSend.push({
+        title: '⚡ Anki Daily Review Pass',
+        body: "Today's Anki review is complete. (Test Notification)",
+        tag: 'atlas-anki-notification',
+      });
     }
-  } catch (e) {
-    console.warn('Direct Notification constructor unavailable or restricted on this browser:', e);
+  }
+
+  // 2. Separate System Revision Notification
+  if (settings.notifyRevisions) {
+    if (tasks.dueRevisionsCount > 0) {
+      const topicList = tasks.dueRevisionNames.join(', ');
+      notificationsToSend.push({
+        title: '📖 Scheduled Topic Revisions Due',
+        body: `${tasks.dueRevisionsCount} scheduled revision${tasks.dueRevisionsCount > 1 ? 's' : ''} due today: ${topicList}${tasks.dueRevisionsCount > 3 ? '...' : ''}. Tap to review!`,
+        tag: 'atlas-revisions-notification',
+      });
+    } else if (force) {
+      notificationsToSend.push({
+        title: '📖 Scheduled Topic Revisions Due',
+        body: 'All scheduled revisions are up to date! (Test Notification)',
+        tag: 'atlas-revisions-notification',
+      });
+    }
+  }
+
+  if (notificationsToSend.length === 0) {
     return false;
   }
-  return false;
+
+  let sentCount = 0;
+  for (const notif of notificationsToSend) {
+    const sent = await dispatchLocalNotification(notif.title, {
+      body: notif.body,
+      tag: notif.tag,
+      icon: '/logo.svg',
+      badge: '/logo.svg',
+      vibrate: [200, 100, 200],
+    } as NotificationOptions);
+    if (sent) sentCount++;
+  }
+
+  if (sentCount > 0) {
+    saveNotificationSettings({ lastNotifiedDate: todayStr });
+  }
+
+  return sentCount > 0;
 }
 
 /**
