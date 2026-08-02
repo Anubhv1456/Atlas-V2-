@@ -190,7 +190,7 @@ export const googleSignIn = async (): Promise<{ user: any; accessToken: string }
       }
     };
 
-    tokenClient.requestAccessToken({ prompt: 'consent' });
+    tokenClient.requestAccessToken({});
   });
 };
 
@@ -211,6 +211,56 @@ export const getAccessToken = async (): Promise<string | null> => {
   if (accessToken && tokenExpiry > Date.now()) {
     return accessToken;
   }
+  
+  if (currentUser) {
+    // Attempt silent renewal if session is known but token expired
+    await setupTokenClient();
+    return new Promise((resolve) => {
+      let isResolved = false;
+      
+      const timeoutId = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          console.warn('Silent token renewal timed out');
+          resolve(null);
+        }
+      }, 5000); // 5 seconds timeout
+
+      if (!tokenClient) {
+        isResolved = true;
+        clearTimeout(timeoutId);
+        resolve(null);
+        return;
+      }
+      tokenClient.callback = (response: any) => {
+        if (isResolved) return;
+        isResolved = true;
+        clearTimeout(timeoutId);
+        if (response.error !== undefined) {
+          console.warn('Silent token renewal failed', response);
+          resolve(null);
+          return;
+        }
+        const token = response.access_token;
+        const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
+        saveSession(currentUser, token, expiresIn);
+        if (authStateListener) authStateListener(currentUser, token);
+        resolve(token);
+      };
+      try {
+        // 'none' prevents any UI. If consent or login is required, it returns an error.
+        tokenClient.requestAccessToken({ prompt: 'none' });
+      } catch (err) {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
+          console.warn('Error during silent token request', err);
+          resolve(null);
+        }
+      }
+    });
+  }
+
   return null;
 };
 
