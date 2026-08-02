@@ -1,4 +1,4 @@
-import { exportData, importData } from '../db/database';
+import { exportData, importData, mergeData, MergeStats } from '../db/database';
 
 const CLIENT_ID = '983844880865-imtckeuh0e5a7t0ongkg2ofe3gelbtmi.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
@@ -308,4 +308,51 @@ export async function downloadFromDrive(token: string) {
   }
 
   await importData(data);
+}
+
+/**
+ * Performs a 2-way row-level Last-Write-Wins (LWW) merge between local database and Google Drive backup.
+ * Downloads remote state, merges records based on timestamp comparison, and re-uploads merged state.
+ */
+export async function syncWithDrive(token: string): Promise<{ stats: MergeStats }> {
+  const { user } = restoreSession();
+  if (!user && !currentUser) throw new Error("Must be logged in to sync.");
+
+  const fileId = await findBackupFileId(token);
+  if (!fileId) {
+    // If no remote backup exists yet, upload current local state
+    await uploadToDrive(token);
+    const local = await exportData();
+    return {
+      stats: {
+        updated: 0,
+        inserted: (local.subjects?.length || 0) + (local.systems?.length || 0),
+        unchanged: 0,
+        totalMerged: (local.subjects?.length || 0) + (local.systems?.length || 0),
+      },
+    };
+  }
+
+  // 1. Download remote data
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || "Failed to download from Google Drive.");
+  }
+
+  const remoteData = await res.json();
+  if (!remoteData.subjects || !remoteData.systems) {
+    throw new Error('Invalid backup format received from Cloud.');
+  }
+
+  // 2. Perform LWW row-level merge locally
+  const { stats } = await mergeData(remoteData);
+
+  // 3. Upload merged state back to Google Drive
+  await uploadToDrive(token);
+
+  return { stats };
 }

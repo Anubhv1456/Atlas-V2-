@@ -1,15 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { exportData, importData } from '@/db/database';
 import { db } from '@/db/database';
-import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers, Lock, KeyRound, Shield } from 'lucide-react';
+import { Moon, Sun, Share2, Upload, Trash2, ShieldAlert, Clock, RotateCcw, ShieldCheck, RefreshCw, CheckCircle2, Sparkles, FileText, Layers, Lock, KeyRound, Shield, Smartphone, Bell, Download, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { encryptClientData, decryptClientData, isEncryptedPayload, EncryptedPayload } from '@/lib/crypto';
+import {
+  getNotificationSettings,
+  saveNotificationSettings,
+  triggerSpacedRepetitionNotification,
+  isPwaInstallable,
+  promptPwaInstall,
+  NotificationSettings,
+} from '@/lib/pwaAndNotifications';
 
-import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken } from '@/lib/driveSync';
+import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getAccessToken, syncWithDrive } from '@/lib/driveSync';
 import { Cloud, CloudUpload, CloudDownload, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -79,6 +87,72 @@ export default function Settings() {
   const [cryptoStage, setCryptoStage] = useState<string>('');
   const [cryptoProgress, setCryptoProgress] = useState<number>(0);
 
+  // PWA & Notification states
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(getNotificationSettings());
+  const [canInstallPwa, setCanInstallPwa] = useState<boolean>(isPwaInstallable());
+  const [isStandalone, setIsStandalone] = useState<boolean>(
+    typeof window !== 'undefined' &&
+      (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true)
+  );
+
+  useEffect(() => {
+    const handlePwaAvail = () => setCanInstallPwa(true);
+    const handlePwaDone = () => setCanInstallPwa(false);
+    window.addEventListener('pwa-install-available', handlePwaAvail);
+    window.addEventListener('pwa-install-completed', handlePwaDone);
+    return () => {
+      window.removeEventListener('pwa-install-available', handlePwaAvail);
+      window.removeEventListener('pwa-install-completed', handlePwaDone);
+    };
+  }, []);
+
+  const handleToggleNotification = async (enabled: boolean) => {
+    if (enabled && 'Notification' in window) {
+      if (Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          toast({
+            title: 'Notification Permission Denied',
+            description: 'Please enable notifications in your browser/device settings to receive daily reminders.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
+    const updated = saveNotificationSettings({ enabled });
+    setNotifSettings(updated);
+    toast({
+      title: enabled ? 'Reminders Enabled 🔔' : 'Reminders Disabled',
+      description: enabled
+        ? 'Atlas will send local browser reminders for pending Anki decks & system revisions.'
+        : 'Daily spaced repetition reminders have been turned off.',
+    });
+  };
+
+  const handleTestNotification = async () => {
+    const sent = await triggerSpacedRepetitionNotification(true);
+    if (sent) {
+      toast({
+        title: 'Test Notification Sent! 🚀',
+        description: 'Check your device notifications banner.',
+      });
+    } else {
+      toast({
+        title: 'Notification Not Sent',
+        description: 'Ensure notification permissions are granted in your browser.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handlePwaInstallClick = async () => {
+    const success = await promptPwaInstall();
+    if (success) {
+      toast({ title: 'PWA Installed! 🎉', description: 'Atlas is now added to your home screen.' });
+    }
+  };
+
 
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -97,19 +171,21 @@ export default function Settings() {
     }
   };
 
-  const handleCloudPush = async () => {
+  const handleCloudSync = async () => {
     const token = await getAccessToken();
     if (!token) { toast({ title: 'Not authenticated', variant: 'destructive' }); return; }
     setSyncing(true);
     try {
-      await uploadToDrive(token);
-      toast({ title: 'Success', description: 'Data synced to Cloud.' });
-      
+      const { stats } = await syncWithDrive(token);
+      toast({
+        title: 'Cloud Sync Completed! ⚡',
+        description: `Last-Write-Wins Merge: ${stats.inserted} added, ${stats.updated} updated (${stats.totalMerged} total records synchronized).`,
+      });
       const now = new Date().toISOString();
       localStorage.setItem(LS_KEY, now);
       setLastBackup(now);
     } catch (e: any) {
-      toast({ title: 'Sync Failed', description: e.message, variant: 'destructive' }); return;
+      toast({ title: 'Sync Failed', description: e.message, variant: 'destructive' });
     } finally {
       setSyncing(false);
     }
@@ -474,6 +550,151 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* PWA & Mobile Installation */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1 mt-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">App & Offline Experience</h2>
+            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary font-medium bg-primary/5 px-2 py-0.5 rounded-full">
+              Works Offline
+            </Badge>
+          </div>
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-500">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground flex items-center gap-2">
+                    Install Atlas App
+                    {isStandalone ? (
+                      <Badge variant="secondary" className="text-[10px] bg-green-500/10 text-green-500 border-none">
+                        App Installed
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px] bg-indigo-500/10 text-indigo-500 border-none">
+                        Install Available
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {isStandalone
+                      ? 'Atlas is running as an app on your device.'
+                      : 'Add Atlas to your home screen or desktop to open it quickly, even without internet.'}
+                  </div>
+                </div>
+              </div>
+
+              {!isStandalone && (
+                <Button
+                  size="sm"
+                  onClick={handlePwaInstallClick}
+                  disabled={!canInstallPwa}
+                  className="gap-1.5 text-xs font-semibold"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {canInstallPwa ? 'Install App' : 'App Ready'}
+                </Button>
+              )}
+            </div>
+
+            <div className="p-4 bg-muted/20 text-xs space-y-2">
+              <div className="font-medium text-foreground flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-500" /> Saved safely on your device
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Your study logs, revision schedules, past exam scores, and flashcard updates work completely offline. Any offline updates will sync automatically when you reconnect.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Local Push Notifications & Daily Reminders */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1 mt-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily Study Reminders</h2>
+            <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500 font-medium bg-amber-500/5 px-2 py-0.5 rounded-full">
+              Device Alerts
+            </Badge>
+          </div>
+          <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
+            {/* Master Toggle */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-500">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">Daily Study Reminders</div>
+                  <div className="text-xs text-muted-foreground">Get friendly reminders on this device for pending flashcards and due reviews</div>
+                </div>
+              </div>
+              <Switch
+                checked={notifSettings.enabled}
+                onCheckedChange={handleToggleNotification}
+              />
+            </div>
+
+            {notifSettings.enabled && (
+              <>
+                <div className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground">Flashcard Review Reminders</div>
+                      <div className="text-xs text-muted-foreground">Remind me if today's flashcard reviews aren't done yet</div>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={notifSettings.notifyAnki}
+                    onCheckedChange={(val) => {
+                      const updated = saveNotificationSettings({ notifyAnki: val });
+                      setNotifSettings(updated);
+                    }}
+                  />
+                </div>
+
+                <div className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-500/10 rounded-xl text-purple-500">
+                      <RotateCcw className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground">Due Topic Revision Reminders</div>
+                      <div className="text-xs text-muted-foreground">Remind me when a subject topic is scheduled for review</div>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={notifSettings.notifyRevisions}
+                    onCheckedChange={(val) => {
+                      const updated = saveNotificationSettings({ notifyRevisions: val });
+                      setNotifSettings(updated);
+                    }}
+                  />
+                </div>
+
+                <div className="p-4 flex items-center justify-between bg-muted/20">
+                  <div>
+                    <div className="font-semibold text-foreground text-xs">Test Device Notifications</div>
+                    <div className="text-[11px] text-muted-foreground">Send a sample notification to make sure alerts work on your device</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleTestNotification}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-amber-500" />
+                    Send Test Alert
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
         
         {/* Cloud Sync */}
         <section>
@@ -489,7 +710,7 @@ export default function Settings() {
                 </div>
                 <div>
                   <div className="font-semibold text-foreground">Sign in with Google</div>
-                  <div className="text-xs text-muted-foreground">Enable cross-device cloud sync</div>
+                  <div className="text-xs text-muted-foreground">Sync your progress across all your devices</div>
                 </div>
               </button>
             ) : (
@@ -508,16 +729,21 @@ export default function Settings() {
                   </Button>
                 </div>
                 <button
-                  onClick={handleCloudPush}
+                  onClick={handleCloudSync}
                   disabled={syncing}
                   className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
                 >
-                  <div className="p-2 bg-green-500/10 rounded-xl text-green-500">
-                    <CloudUpload className="w-5 h-5" />
+                  <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                    <Cloud className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-foreground">Backup to Cloud</div>
-                    <div className="text-xs text-muted-foreground">Push local data to Cloud</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-foreground flex items-center gap-2">
+                      Smart Cloud Sync
+                      <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-none">
+                        Auto-Merge
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Seamlessly combine progress from all your devices so nothing is lost</div>
                   </div>
                 </button>
                 <button
@@ -529,8 +755,8 @@ export default function Settings() {
                     <CloudDownload className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-semibold text-foreground">Restore from Cloud</div>
-                    <div className="text-xs text-muted-foreground">Pull data from Cloud</div>
+                    <div className="font-semibold text-foreground">Restore Cloud Backup</div>
+                    <div className="text-xs text-muted-foreground">Replace current data on this device with your Google Drive backup</div>
                   </div>
                 </button>
               </>
@@ -541,7 +767,7 @@ export default function Settings() {
         {/* Automated Local Backup & Snapshots */}
         <section>
           <div className="flex items-center justify-between mb-3 px-1 mt-8">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Automated Auto-Snapshots</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Automatic Device Backups</h2>
             <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-500 font-medium bg-emerald-500/5 px-2 py-0.5 rounded-full">
               <ShieldCheck className="w-3 h-3 mr-1 text-emerald-500" /> Active Safeguard
             </Badge>
@@ -555,8 +781,8 @@ export default function Settings() {
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-semibold text-foreground">Daily Rolling Auto-Snapshots</div>
-                  <div className="text-xs text-muted-foreground">Automatically saves local database snapshots every 12 hours</div>
+                  <div className="font-semibold text-foreground">Automatic Daily Copies</div>
+                  <div className="text-xs text-muted-foreground">Saves automatic backup copies on your device twice a day</div>
                 </div>
               </div>
               <Switch
@@ -574,20 +800,20 @@ export default function Settings() {
                 <RefreshCw className="w-5 h-5" />
               </div>
               <div className="flex-1">
-                <div className="font-semibold text-foreground">Create Snapshot Now</div>
-                <div className="text-xs text-muted-foreground">Force-save an immediate local backup snapshot</div>
+                <div className="font-semibold text-foreground">Save Backup Copy Now</div>
+                <div className="text-xs text-muted-foreground">Save an immediate backup copy of your current progress</div>
               </div>
-              <Badge variant="secondary" className="text-xs">Take Snapshot</Badge>
+              <Badge variant="secondary" className="text-xs">Save Copy</Badge>
             </button>
 
             {/* List of Rolling Snapshots */}
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-foreground">Recent Rolling Local Snapshots ({autoSnapshots.length}/5)</span>
+                <span className="text-xs font-semibold text-foreground">Saved Device Copies ({autoSnapshots.length}/5)</span>
               </div>
 
               {autoSnapshots.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No automatic snapshots stored yet. Snapshots will be generated automatically as you study.</p>
+                <p className="text-xs text-muted-foreground italic">No automatic backups saved yet. Copies will be created automatically as you log your study progress.</p>
               ) : (
                 <div className="space-y-2">
                   {autoSnapshots.map((snap) => (
@@ -597,7 +823,7 @@ export default function Settings() {
                           {formatLastBackup(snap.timestamp)}
                         </div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">
-                          {snap.subjectsCount} subjects • {snap.systemsCount} systems • {snap.scoreLogsCount} score logs
+                          {snap.subjectsCount} subjects • {snap.systemsCount} topics • {snap.scoreLogsCount} test scores
                         </div>
                       </div>
 
@@ -633,7 +859,7 @@ export default function Settings() {
 
         {/* Backup */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Backup</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1 mt-8">Manual Backup & Restore</h2>
           <div className="bg-card rounded-2xl border shadow-sm overflow-hidden divide-y">
             {/* Quick Backup */}
             <button
@@ -644,8 +870,8 @@ export default function Settings() {
                 <Share2 className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-semibold text-foreground">Quick Backup</div>
-                <div className="text-xs text-muted-foreground">Share unencrypted JSON to any app or drive</div>
+                <div className="font-semibold text-foreground">Quick Export</div>
+                <div className="text-xs text-muted-foreground">Save or share a backup file of your study data</div>
               </div>
             </button>
 
@@ -660,9 +886,9 @@ export default function Settings() {
               <div>
                 <div className="font-semibold text-foreground flex items-center gap-1.5">
                   Password-Protected Export
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-indigo-500/10 text-indigo-500 border-none font-semibold">Protected</Badge>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-indigo-500/10 text-indigo-500 border-none font-semibold font-sans">Protected</Badge>
                 </div>
-                <div className="text-xs text-muted-foreground">Save an encrypted backup secured with a password</div>
+                <div className="text-xs text-muted-foreground">Lock your backup file with a secret password</div>
               </div>
             </button>
 
@@ -675,8 +901,8 @@ export default function Settings() {
                 <Upload className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-semibold text-foreground">Import Backup</div>
-                <div className="text-xs text-muted-foreground">Restore your data from a standard or encrypted backup (.json)</div>
+                <div className="font-semibold text-foreground">Restore From File</div>
+                <div className="text-xs text-muted-foreground">Restore your study progress from a saved backup file</div>
               </div>
               <input
                 type="file"
@@ -764,7 +990,7 @@ export default function Settings() {
               </div>
               <div>
                 <div className="font-semibold text-destructive">Delete All Data</div>
-                <div className="text-xs text-destructive/80">Wipes local database completely</div>
+                <div className="text-xs text-destructive/80">Permanently deletes all saved subjects and study progress from this device</div>
               </div>
             </button>
           </div>
@@ -777,7 +1003,7 @@ export default function Settings() {
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold">Replace Current Data?</DialogTitle>
             <DialogDescription className="pt-1">
-              This backup will permanently replace everything in your local database.
+              This backup file will replace all current study subjects and logs on this device.
             </DialogDescription>
           </DialogHeader>
 

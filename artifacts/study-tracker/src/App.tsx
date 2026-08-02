@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
-import { Toaster as SonnerToaster } from 'sonner';
+import { Toaster as SonnerToaster, toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
@@ -15,6 +15,7 @@ import Timeline from '@/pages/Timeline';
 import Analytics from '@/pages/Analytics';
 import Settings from '@/pages/Settings';
 import { checkAndRunAutoBackup } from '@/lib/autoBackup';
+import { triggerSpacedRepetitionNotification } from '@/lib/pwaAndNotifications';
 
 const queryClient = new QueryClient();
 
@@ -68,6 +69,27 @@ function Router() {
 function App() {
   useEffect(() => {
     checkAndRunAutoBackup();
+    triggerSpacedRepetitionNotification(false);
+
+    const handleOffline = () => {
+      toast.info('⚡ Offline Mode Active', {
+        description: 'Atlas is operating 100% locally from IndexedDB. All updates are saved offline.',
+      });
+    };
+
+    const handleOnline = () => {
+      toast.success('🌐 Connection Restored', {
+        description: 'You are back online.',
+      });
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   return (

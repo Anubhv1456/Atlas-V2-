@@ -1,5 +1,5 @@
 import { exportData, importData } from '@/db/database';
-import { getAccessToken, uploadToDrive } from '@/lib/driveSync';
+import { getAccessToken, syncWithDrive } from '@/lib/driveSync';
 
 const SNAPSHOTS_KEY = 'atlas_auto_snapshots_v1';
 const ENABLED_KEY = 'atlas_autobackup_enabled';
@@ -124,7 +124,7 @@ export async function checkAndRunAutoBackup(): Promise<void> {
       const lastCloudSync = localStorage.getItem(LAST_AUTO_CLOUD_SYNC_KEY);
       const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
       if (!lastCloudSync || (now - new Date(lastCloudSync).getTime() > TWENTY_FOUR_HOURS)) {
-        await uploadToDrive(token);
+        await syncWithDrive(token);
         localStorage.setItem(LAST_AUTO_CLOUD_SYNC_KEY, new Date().toISOString());
       }
     }

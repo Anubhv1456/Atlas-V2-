@@ -60,8 +60,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      selfDestroying: true,
+      selfDestroying: false,
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       manifestFilename: 'manifest.json',
       manifest: {
         name: 'Atlas Study Tracker',
@@ -74,15 +75,46 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
+          { src: '/logo.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
           { src: '/logo.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
         cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
       },
       devOptions: {
-        enabled: false,
+        enabled: true,
       },
     }),
     bundleObfuscatorPlugin(),

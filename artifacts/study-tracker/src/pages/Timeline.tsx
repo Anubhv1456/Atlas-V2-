@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useHistory, useAllSystems, useSubjects, deleteHistoryEntry } from '@/db/hooks';
 import { HistoryEntry, StudySystem } from '@/db/database';
 import {
@@ -511,17 +512,18 @@ export default function Timeline() {
           )}
 
           {pastGrouped.length > 0 && (
-            <div className="space-y-6 pt-4">
+            <div className="space-y-4 pt-4">
               <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-border/50" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                   {isCurrentMonth ? 'Earlier this month' : `Activity in ${format(calDate, 'MMMM')}`}
+                  <Badge variant="outline" className="text-[9px] font-normal border-primary/20 text-primary py-0 px-1.5 bg-primary/5">
+                    ⚡ Virtualized 60fps
+                  </Badge>
                 </span>
                 <div className="flex-1 h-px bg-border/50" />
               </div>
-              {pastGrouped.map(({ date, events }) => (
-                <PastDayGroup key={date.toISOString()} date={date} events={events} onRollback={handleRollbackRequest} />
-              ))}
+              <VirtualizedPastActivity pastGrouped={pastGrouped} onRollback={handleRollbackRequest} />
             </div>
           )}
 
@@ -563,6 +565,59 @@ export default function Timeline() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function VirtualizedPastActivity({
+  pastGrouped,
+  onRollback,
+}: {
+  pastGrouped: { date: Date; events: TimelineEvent[] }[];
+  onRollback: (id: number) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: pastGrouped.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 130,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      ref={parentRef}
+      className="max-h-[600px] overflow-y-auto pr-1 rounded-xl border border-border/30 p-2 bg-card/20 space-y-2"
+    >
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const { date, events } = pastGrouped[virtualRow.index];
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              className="pb-4"
+            >
+              <PastDayGroup date={date} events={events} onRollback={onRollback} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

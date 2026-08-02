@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Subject, StudySystem } from '@/db/database';
 import { setFocus } from '@/db/hooks';
@@ -696,38 +697,98 @@ export default function Analytics() {
             No score records match your search filter.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground font-medium">
-                  <th className="pb-2 pl-2">Date</th>
-                  <th className="pb-2">Title</th>
-                  <th className="pb-2">Category</th>
-                  <th className="pb-2">Score</th>
-                  <th className="pb-2">Percentage</th>
-                  <th className="pb-2">Notes</th>
-                  <th className="pb-2 pr-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {displayLogs.map((log) => {
+          <VirtualizedScoreTable
+            displayLogs={displayLogs}
+            subjectMap={subjectMap}
+            handleDeleteLog={handleDeleteLog}
+            getPercentageColorBadge={getPercentageColorBadge}
+          />
+        )}
+      </div>
+
+      {/* Score Log Modal */}
+      <ScoreLogModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </div>
+  );
+}
+
+function VirtualizedScoreTable({
+  displayLogs,
+  subjectMap,
+  handleDeleteLog,
+  getPercentageColorBadge,
+}: {
+  displayLogs: any[];
+  subjectMap: Map<number, Subject>;
+  handleDeleteLog: (id: number) => void;
+  getPercentageColorBadge: (pct: number) => string;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: displayLogs.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 52,
+    overscan: 5,
+  });
+
+  return (
+    <div ref={parentRef} className="max-h-[500px] overflow-auto border border-border/40 rounded-xl">
+      <table className="w-full text-left text-xs border-collapse">
+        <thead className="sticky top-0 bg-card z-10 border-b border-border text-muted-foreground font-medium shadow-xs">
+          <tr className="bg-muted/40">
+            <th className="py-2.5 pl-3 w-28">Date</th>
+            <th className="py-2.5">Title</th>
+            <th className="py-2.5 w-24">Category</th>
+            <th className="py-2.5 w-24">Score</th>
+            <th className="py-2.5 w-28">Percentage</th>
+            <th className="py-2.5">Notes</th>
+            <th className="py-2.5 pr-3 text-right w-16">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+            <td colSpan={7} className="p-0 border-0 relative">
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const log = displayLogs[virtualRow.index];
                   const subName = subjectMap.get(log.subjectId)?.name;
                   return (
-                    <tr key={log.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 pl-2 font-mono text-muted-foreground whitespace-nowrap">
+                    <div
+                      key={log.id ?? virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
+                      data-index={virtualRow.index}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                      className="flex items-center border-b border-border/40 py-2 hover:bg-muted/30 transition-colors text-xs px-2"
+                    >
+                      <div className="w-28 pl-1 font-mono text-muted-foreground shrink-0 truncate">
                         {format(new Date(log.timestamp), 'MMM d, yyyy')}
-                      </td>
-                      <td className="py-3 font-semibold text-foreground">
-                        <div>
-                          <span>{log.title}</span>
-                          {subName && (
-                            <span className="block text-[10px] text-muted-foreground font-normal">
-                              {subName}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3">
+                      </div>
+                      <div className="flex-1 font-semibold text-foreground min-w-0 pr-2">
+                        <div className="truncate">{log.title}</div>
+                        {subName && (
+                          <div className="text-[10px] text-muted-foreground font-normal truncate">
+                            {subName}
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-24 shrink-0">
                         <Badge
                           variant="outline"
                           className={`text-[10px] capitalize ${
@@ -738,19 +799,19 @@ export default function Analytics() {
                         >
                           {log.type}
                         </Badge>
-                      </td>
-                      <td className="py-3 font-mono font-medium">
+                      </div>
+                      <div className="w-24 font-mono font-medium shrink-0">
                         {log.score} / {log.total}
-                      </td>
-                      <td className="py-3">
+                      </div>
+                      <div className="w-28 shrink-0">
                         <span className={`inline-block px-2 py-0.5 rounded-md font-mono font-bold text-xs border ${getPercentageColorBadge(log.percentage)}`}>
                           {log.percentage}%
                         </span>
-                      </td>
-                      <td className="py-3 max-w-xs truncate text-muted-foreground text-[11px]">
+                      </div>
+                      <div className="flex-1 max-w-xs truncate text-muted-foreground text-[11px] pr-2">
                         {log.notes || '—'}
-                      </td>
-                      <td className="py-3 pr-2 text-right">
+                      </div>
+                      <div className="w-16 text-right shrink-0 pr-1">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -759,21 +820,15 @@ export default function Analytics() {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Score Log Modal */}
-      <ScoreLogModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
