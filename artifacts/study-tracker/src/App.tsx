@@ -69,7 +69,9 @@ function Router() {
 function App() {
   useEffect(() => {
     checkAndRunAutoBackup();
-    triggerSpacedRepetitionNotification(false);
+    triggerSpacedRepetitionNotification(false).catch(err => {
+      console.warn('Background notification trigger suppressed:', err);
+    });
 
     const handleOffline = () => {
       toast.info('⚡ Offline Mode Active', {

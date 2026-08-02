@@ -112,30 +112,36 @@ export async function triggerSpacedRepetitionNotification(force = false): Promis
     ? `Pending: ${messages.join(' | ')}. Keep up your streak!`
     : 'All caught up! Tap to review your study analytics.';
 
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+  if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, {
-        body,
-        icon: '/logo.svg',
-        badge: '/logo.svg',
-        tag: 'atlas-spaced-repetition',
-      });
-      saveNotificationSettings({ lastNotifiedDate: todayStr });
-      return true;
+      if (registration && registration.showNotification) {
+        await registration.showNotification(title, {
+          body,
+          icon: '/logo.svg',
+          badge: '/logo.svg',
+          tag: 'atlas-spaced-repetition',
+        });
+        saveNotificationSettings({ lastNotifiedDate: todayStr });
+        return true;
+      }
     } catch (e) {
-      console.warn('Service worker notification failed, falling back to Notification API', e);
+      console.warn('Service worker notification failed, attempting Notification fallback', e);
     }
   }
 
-  new Notification(title, {
-    body,
-    icon: '/logo.svg',
-    tag: 'atlas-spaced-repetition',
-  });
-
-  saveNotificationSettings({ lastNotifiedDate: todayStr });
-  return true;
+  try {
+    new Notification(title, {
+      body,
+      icon: '/logo.svg',
+      tag: 'atlas-spaced-repetition',
+    });
+    saveNotificationSettings({ lastNotifiedDate: todayStr });
+    return true;
+  } catch (e) {
+    console.warn('Direct Notification constructor failed or is restricted on this platform:', e);
+    return false;
+  }
 }
 
 /**
