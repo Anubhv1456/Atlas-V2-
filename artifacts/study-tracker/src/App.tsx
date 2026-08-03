@@ -1,20 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster, toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
+const NotFound = lazy(() => import('@/pages/not-found'));
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { BottomNav } from '@/components/BottomNav';
 import { CommandPalette } from '@/components/CommandPalette';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { syncWithDrive, getValidTokenSync, getAccessToken } from '@/lib/driveSync';
-import Home from '@/pages/Home';
-import SubjectDetail from '@/pages/SubjectDetail';
-import Timeline from '@/pages/Timeline';
-import Analytics from '@/pages/Analytics';
-import Settings from '@/pages/Settings';
+const Home = lazy(() => import('@/pages/Home'));
+const SubjectDetail = lazy(() => import('@/pages/SubjectDetail'));
+const Timeline = lazy(() => import('@/pages/Timeline'));
+const Analytics = lazy(() => import('@/pages/Analytics'));
+const Settings = lazy(() => import('@/pages/Settings'));
 import { checkAndRunAutoBackup } from '@/lib/autoBackup';
 import { triggerSpacedRepetitionNotification } from '@/lib/pwaAndNotifications';
 
@@ -64,19 +64,25 @@ function Router() {
         <PullToRefresh onRefresh={handleRefresh}>
           <motion.main
             key={location}
-            initial={{ opacity: 0.8, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.12, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.4, type: "spring", bounce: 0, damping: 25, stiffness: 200 }}
             className="w-full h-full"
           >
-            <Switch>
-              <Route path="/" component={Home} />
-              <Route path="/subjects/:id" component={SubjectDetail} />
-              <Route path="/timeline" component={Timeline} />
-              <Route path="/analytics" component={Analytics} />
-              <Route path="/settings" component={Settings} />
-              <Route component={NotFound} />
-            </Switch>
+            <Suspense fallback={
+              <div className="flex items-center justify-center w-full h-full min-h-[50vh]">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }>
+              <Switch>
+                <Route path="/" component={Home} />
+                <Route path="/subjects/:id" component={SubjectDetail} />
+                <Route path="/timeline" component={Timeline} />
+                <Route path="/analytics" component={Analytics} />
+                <Route path="/settings" component={Settings} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
           </motion.main>
         </PullToRefresh>
       </div>

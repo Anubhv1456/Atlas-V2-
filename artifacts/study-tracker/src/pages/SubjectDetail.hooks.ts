@@ -8,6 +8,7 @@ import {
 } from '@/db';
 import { PYQYear, StudySystem } from '@/db';
 import { calculateSubjectProgress } from '@/lib/progress';
+import { calculateYearScoreMap, generateCustomYearRange } from '@/lib/subjectUtils';
 import { validateNumberOfYears, validateYearInput } from '@/lib/validation';
 
 type StageKey = 'contentCompleted' | 'qbankDone';
@@ -33,21 +34,7 @@ export function usePYQSectionLogic(subjectId: number, subjectName: string, years
   const scoreLogs = useScoreLogsBySubject(subjectId);
 
   const yearScoreMap = useMemo(() => {
-    const map = new Map<number, { percentage: number; score: number; total: number; timestamp: Date }>();
-    for (const log of scoreLogs) {
-      if (log.type === 'pyq' && log.pyqYearId) {
-        const existing = map.get(log.pyqYearId);
-        if (!existing || new Date(log.timestamp).getTime() > new Date(existing.timestamp).getTime()) {
-          map.set(log.pyqYearId, {
-            percentage: log.percentage,
-            score: log.score,
-            total: log.total,
-            timestamp: log.timestamp,
-          });
-        }
-      }
-    }
-    return map;
+    return calculateYearScoreMap(scoreLogs);
   }, [scoreLogs]);
 
   const completed = years.filter(y => y.completed).length;

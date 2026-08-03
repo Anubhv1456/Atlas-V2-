@@ -96,6 +96,17 @@ export default defineConfig({
     sourcemap: false,
     cssMinify: true,
     target: 'es2020',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'recharts': ['recharts'],
+          'framer-motion': ['framer-motion'],
+          'lucide': ['lucide-react'],
+          'dexie': ['dexie', 'dexie-react-hooks'],
+          'vendor': ['react', 'react-dom', 'wouter', '@tanstack/react-query'],
+        }
+      }
+    }
   },
   server: {
     port,

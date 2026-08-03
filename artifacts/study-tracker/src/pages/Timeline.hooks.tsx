@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { historyToEvent, systemToRevisionEvent, buildActivityHeatmap, groupPastEntries } from '@/lib/timelineUtils';
 import { useLocation } from 'wouter';
 import { 
   useSubjects, useAllSystems, db, deleteHistoryEntry
@@ -15,46 +16,9 @@ import {
 } from 'date-fns';
 import { toast } from 'sonner';
 
-// ── Map a HistoryEntry → completed TimelineEvent ──────────────────────────────
-function historyToEvent(h: HistoryEntry): TimelineEvent {
-  const typeMap: Record<string, TimelineEvent['eventType']> = {
-    contentDone:     'contentCompleted',
-    contentProgress: 'contentCompleted',
-    qbankDone:       'qbankDone',
-    pyqsDone:        'pyqsDone',
-    revision:        'revisionSystem',
-  };
-  const entityName = h.taskKey === 'pyqsDone'
-    ? h.taskLabel
-    : `${h.systemName} ${h.taskLabel}`;
-  return {
-    id:          String(h.id ?? `${h.systemId}-${h.taskKey}-${h.completedAt}`),
-    dbHistoryId: h.id,
-    eventType:   typeMap[h.taskKey] ?? 'contentCompleted',
-    entityName,
-    subjectName: h.subjectName,
-    date:        new Date(h.completedAt),
-    status:      'completed',
-  };
-}
 
-// ── Map a StudySystem → upcoming / overdue TimelineEvent ─────────────────────
-function systemToRevisionEvent(
-  sys: StudySystem,
-  subjectName: string,
-  status: 'upcoming' | 'overdue',
-): TimelineEvent {
-  const days = daysOverdue(sys);
-  return {
-    id:          `rev-${sys.id}-${status}`,
-    eventType:   'revisionSystem',
-    entityName:  `${sys.name} Revision`,
-    subjectName,
-    date:        new Date(sys.nextRevisionDate!),
-    status,
-    meta:        status === 'overdue' ? { daysOverdue: days } : undefined,
-  };
-}
+
+
 
 export function useTimelineLogic() {
 
@@ -89,12 +53,7 @@ export function useTimelineLogic() {
   const monthEnd   = endOfMonth(calDate);
   const isCurrentMonth = isSameMonth(calDate, now);
 
-  // Activity map for the heatmap
-  const activityByDay = new Map<string, number>();
-  history.forEach(h => {
-    const d = format(new Date(h.completedAt), 'yyyy-MM-dd');
-    activityByDay.set(d, (activityByDay.get(d) || 0) + 1);
-  });
+  const activityByDay = buildActivityHeatmap(history);
 
   // ── Completed events in the visible month ────────────────────────────────
   const monthCompleted: TimelineEvent[] = history
@@ -157,13 +116,7 @@ export function useTimelineLogic() {
 
   // Past days in the selected month, most recent first
   const pastEntries = filtered(monthCompleted).filter(e => isCurrentMonth ? (!selectedDate ? !isToday(e.date) : true) : true);
-  const pastGrouped: { date: Date; events: TimelineEvent[] }[] = [];
-  pastEntries.forEach(event => {
-    const existing = pastGrouped.find(g => isSameDay(g.date, event.date));
-    if (existing) existing.events.push(event);
-    else pastGrouped.push({ date: event.date, events: [event] });
-  });
-  pastGrouped.sort((a, b) => b.date.getTime() - a.date.getTime());
+  const pastGrouped = groupPastEntries(pastEntries);
 
   const everythingEmpty =
     todayEvents.length === 0 && filteredUpcoming.length === 0 &&

@@ -236,8 +236,11 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground transition-colors duration-500;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
     -webkit-tap-highlight-color: transparent;
@@ -280,21 +283,30 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
+    background: hsl(var(--border) / 0.8);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.4);
+    background: hsl(var(--muted-foreground) / 0.5);
   }
 
   /* Premium interactive card class */
   .premium-card {
-    @apply bg-card border border-border/80 rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30;
+    @apply bg-card border border-border/80 rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5;
   }
 
   /* Glassmorphism background */
   .glass-panel {
-    @apply bg-background/80 backdrop-blur-xl border border-border/60;
+    @apply bg-background/70 backdrop-blur-2xl border border-border/40;
+  }
+  
+  /* Smooth transitions for all interactive elements */
+  a, button, [role="button"], input, select, textarea {
+    @apply transition-all duration-200;
+  }
+  
+  a:active, button:active, [role="button"]:active {
+    @apply scale-[0.98];
   }
 
   @keyframes shimmer {
