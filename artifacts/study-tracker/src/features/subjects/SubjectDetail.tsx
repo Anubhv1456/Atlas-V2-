@@ -6,12 +6,12 @@ import {
   addSystem, updateSubject, deleteSubject, updateSystemsOrder,
   addPYQYear, addPYQYearBatch, updatePYQYear, deletePYQYear, togglePYQYear,
 } from '@/db';
-import { SystemCard } from '@/components/SystemCard';
+import { SystemCard } from '@/features/subjects/SystemCard';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PYQYear } from '@/db';
-import { ScoreLogModal } from '@/components/ScoreLogModal';
+import { ScoreLogModal } from '@/features/analytics/ScoreLogModal';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Trash2, Edit2,
   LayoutList, Lock, Check, BookOpen, Award, LayoutGrid, Sparkles,

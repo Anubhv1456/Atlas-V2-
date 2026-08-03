@@ -7,7 +7,7 @@ export function useDangerZone() {
 
   const handleDeleteAll = useCallback(async () => {
     try {
-      await db.transaction('rw', db.subjects, db.systems, db.history, db.pyqYears, db.scoreLogs, db.uiPreferences, async () => {
+      await db.transaction('rw', [db.subjects, db.systems, db.history, db.pyqYears, db.scoreLogs, db.uiPreferences], async () => {
         await db.subjects.clear();
         await db.systems.clear();
         await db.history.clear();

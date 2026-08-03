@@ -10,7 +10,7 @@ import {
   daysOverdue, calculateDecayScore, today 
 } from '@/db';
 import { calculateSubjectProgress } from '@/lib/progress';
-import { determineFocusSystems } from '@/lib/homeUtils';
+import { determineFocusSystems } from '@/features/dashboard/homeUtils';
 import { DropResult } from '@hello-pangea/dnd';
 
 export function useHomeLogic() {

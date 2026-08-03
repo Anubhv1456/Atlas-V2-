@@ -8,7 +8,7 @@ import {
 } from '@/db';
 import { PYQYear, StudySystem } from '@/db';
 import { calculateSubjectProgress } from '@/lib/progress';
-import { calculateYearScoreMap, generateCustomYearRange } from '@/lib/subjectUtils';
+import { calculateYearScoreMap, generateCustomYearRange } from '@/features/subjects/subjectUtils';
 import { validateNumberOfYears, validateYearInput } from '@/lib/validation';
 
 type StageKey = 'contentCompleted' | 'qbankDone';

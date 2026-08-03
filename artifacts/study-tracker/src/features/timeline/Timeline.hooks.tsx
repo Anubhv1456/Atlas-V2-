@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { historyToEvent, systemToRevisionEvent, buildActivityHeatmap, groupPastEntries } from '@/lib/timelineUtils';
+import { historyToEvent, systemToRevisionEvent, buildActivityHeatmap, groupPastEntries } from '@/features/timeline/timelineUtils';
 import { useLocation } from 'wouter';
 import { 
   useSubjects, useAllSystems, db, deleteHistoryEntry

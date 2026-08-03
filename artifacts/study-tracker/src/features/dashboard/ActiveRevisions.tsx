@@ -1,7 +1,7 @@
 import React from 'react';
 import { Target, BookOpen, Clock, Pencil, X, Plus } from 'lucide-react';
 import { StudySystem, Subject } from '@/db';
-import { DailyAnkiCard } from '@/components/DailyAnkiCard';
+import { DailyAnkiCard } from '@/features/revision/DailyAnkiCard';
 
 interface ActiveRevisionsProps {
   primaryFocus: StudySystem | null;

@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { Subject, StudySystem } from '@/db';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { Button } from '@/components/ui/button';
-import { SubjectCard } from '@/components/SubjectCard';
+import { SubjectCard } from '@/features/subjects/SubjectCard';
 
 interface SubjectsGridProps {
   subjects: Subject[];

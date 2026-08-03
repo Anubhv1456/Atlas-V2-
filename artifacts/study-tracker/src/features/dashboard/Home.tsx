@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useSubjects, useAllSystems, addSubject, updateSubject, deleteSubject, useCurrentStreak, setFocus, setSubjectFocus, updateSubjectsOrder, useAllPYQs } from '@/db';
-import { SubjectCard } from '@/components/SubjectCard';
+import { SubjectCard } from '@/features/subjects/SubjectCard';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
 import { FocusDialog } from '@/components/FocusDialog';
@@ -18,7 +18,7 @@ import { isRevisionDue, isRevisionOverdue, sortSystemsByRevisionPriority, calcul
 import { format } from 'date-fns';
 import { StudySystem, Subject } from '@/db';
 import { calculateOverallProgress, calculateSubjectProgress } from '@/lib/progress';
-import { DailyAnkiCard } from '@/components/DailyAnkiCard';
+import { DailyAnkiCard } from '@/features/revision/DailyAnkiCard';
 // ── Inline result sub-components ──────────────────────────────────────────────
 
 function StatusBadge({ sys }: { sys: StudySystem }) {
@@ -59,9 +59,9 @@ function RevisionPill({ sys }: { sys: StudySystem }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-import { OverviewStats } from '@/components/dashboard/OverviewStats';
-import { ActiveRevisions } from '@/components/dashboard/ActiveRevisions';
-import { SubjectsGrid } from '@/components/dashboard/SubjectsGrid';
+import { OverviewStats } from '@/features/dashboard/OverviewStats';
+import { ActiveRevisions } from '@/features/dashboard/ActiveRevisions';
+import { SubjectsGrid } from '@/features/dashboard/SubjectsGrid';
 import { useHomeLogic } from './Home.hooks';
 
 export default function Home() {

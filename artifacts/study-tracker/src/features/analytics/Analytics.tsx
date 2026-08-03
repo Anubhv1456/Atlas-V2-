@@ -8,7 +8,7 @@ import {
   isRevisionDue,
   daysOverdue,
 } from '@/db';
-import { ScoreLogModal } from '@/components/ScoreLogModal';
+import { ScoreLogModal } from '@/features/analytics/ScoreLogModal';
 import { toast as sonnerToast } from 'sonner';
 import {
   AreaChart,

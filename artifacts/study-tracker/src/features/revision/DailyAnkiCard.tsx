@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AnkiLogo } from '@/components/AnkiLogo';
+import { AnkiLogo } from '@/features/revision/AnkiLogo';
 import { Button } from '@/components/ui/button';
 import { ArrowUpRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';

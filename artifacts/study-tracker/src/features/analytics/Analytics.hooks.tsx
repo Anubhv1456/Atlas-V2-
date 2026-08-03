@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { filterScoreLogs, applyDensityLimit, calculateAnalyticsStats, formatChartData, calculateSystemBreakdown } from '@/lib/analyticsUtils';
+import { filterScoreLogs, applyDensityLimit, calculateAnalyticsStats, formatChartData, calculateSystemBreakdown } from '@/features/analytics/analyticsUtils';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { StudySystem, SystemStatus } from '@/db';
 import { updateSystem, deleteSystem, logCompletion, recordInitialEvaluation, completeRevision, startActiveRevision, logDailyRevisionCheckIn, toggleSystemLengthy } from '@/db';
-import { ProgressBar } from './ProgressBar';
-import { ConfidenceDialog } from './ConfidenceDialog';
-import { ScoreLogModal } from './ScoreLogModal';
+import { ProgressBar } from '@/components/ProgressBar';
+import { ConfidenceDialog } from '@/features/revision/ConfidenceDialog';
+import { ScoreLogModal } from '@/features/analytics/ScoreLogModal';
 import { ChevronDown, Trash2, Check, RotateCcw, Clock, GripVertical, CheckCircle2, Award, Sliders, MoreVertical, Edit2, BookOpen, Calendar, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
