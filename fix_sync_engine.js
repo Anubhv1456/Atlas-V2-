@@ -1,23 +1,9 @@
-import { db, Subject, StudySystem, PYQYear, ScoreLog, HistoryEntry } from '../db';
+const fs = require('fs');
+let path = 'artifacts/study-tracker/src/lib/syncEngine.ts';
+let content = fs.readFileSync(path, 'utf8');
 
-import { updateHLC } from './hlc';
-
-function isHLCGreater(remote: string | undefined, local: string | undefined, remoteTime: number, localTime: number): boolean {
-  if (remote && local) {
-    updateHLC(remote);
-    return remote > local;
-  }
-  return remoteTime > localTime;
-}
-
-export interface MergeStats {
-  updated: number;
-  inserted: number;
-  unchanged: number;
-  totalMerged: number;
-}
-
-export async function mergeData(data: {
+// We will overwrite the mergeData function with a new implementation that uses ID mapping.
+const newMergeData = `export async function mergeData(data: {
   subjects: Subject[];
   systems: StudySystem[];
   history?: HistoryEntry[];
@@ -241,4 +227,8 @@ export async function mergeData(data: {
       totalMerged: updatedCount + insertedCount + unchangedCount,
     },
   };
-}
+}`;
+
+content = content.replace(/export async function mergeData[\s\S]+?return \{\n    stats: \{\n      updated: updatedCount,\n      inserted: insertedCount,\n      unchanged: unchangedCount,\n      totalMerged: updatedCount \+ insertedCount \+ unchangedCount,\n    \},\n  \};\n}/, newMergeData);
+
+fs.writeFileSync(path, content);

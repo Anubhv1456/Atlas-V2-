@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getValidTokenSync, syncWithDrive } from '@/lib/driveSync';
+import { initAuth, googleSignIn, googleSignOut, uploadToDrive, downloadFromDrive, getValidTokenSync, getAccessToken, syncWithDrive } from '@/lib/driveSync';
 
 const LS_KEY = 'atlas_last_backup';
 
@@ -36,7 +36,7 @@ export function useCloudSync() {
   }, [toast]);
 
   const _ensureToken = async () => {
-    let token = getValidTokenSync();
+    let token = await getAccessToken();
     if (!token) {
       try {
         const res = await googleSignIn();

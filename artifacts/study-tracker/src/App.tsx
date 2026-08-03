@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import { BottomNav } from '@/components/BottomNav';
 import { CommandPalette } from '@/components/CommandPalette';
 import { PullToRefresh } from '@/components/PullToRefresh';
-import { syncWithDrive, getValidTokenSync } from '@/lib/driveSync';
+import { syncWithDrive, getValidTokenSync, getAccessToken } from '@/lib/driveSync';
 import Home from '@/pages/Home';
 import SubjectDetail from '@/pages/SubjectDetail';
 import Timeline from '@/pages/Timeline';
@@ -41,7 +41,7 @@ function Router() {
   const [location] = useLocation();
 
   const handleRefresh = async () => {
-    const token = getValidTokenSync();
+    const token = await getAccessToken();
     if (!token) {
       toast.info('Sign in with Google in Settings to enable Cloud Sync.');
       return;
