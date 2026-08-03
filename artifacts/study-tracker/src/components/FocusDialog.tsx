@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { StudySystem, Subject } from '@/db/database';
+import { StudySystem, Subject } from '@/db';
 import { SearchIcon, ChevronRight, BookOpen, Layers, CheckCircle2, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

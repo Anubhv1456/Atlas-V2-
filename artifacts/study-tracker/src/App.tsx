@@ -6,9 +6,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-
 import { BottomNav } from '@/components/BottomNav';
 import { CommandPalette } from '@/components/CommandPalette';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { syncWithDrive, getValidTokenSync } from '@/lib/driveSync';
 import Home from '@/pages/Home';
 import SubjectDetail from '@/pages/SubjectDetail';
 import Timeline from '@/pages/Timeline';
@@ -39,27 +40,45 @@ initTheme();
 function Router() {
   const [location] = useLocation();
 
+  const handleRefresh = async () => {
+    const token = getValidTokenSync();
+    if (!token) {
+      toast.info('Sign in with Google in Settings to enable Cloud Sync.');
+      return;
+    }
+    try {
+      const { stats } = await syncWithDrive(token);
+      toast.success('Cloud Sync Completed! ⚡', {
+        description: `Merged: ${stats.inserted} added, ${stats.updated} updated.`,
+      });
+    } catch (e: any) {
+      toast.error('Sync failed', { description: e.message });
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-[100dvh] w-full">
       <div className="pointer-events-none fixed inset-0 z-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
       <BottomNav />
       <div className="flex-1 w-full relative z-10 overflow-x-hidden">
-        <motion.main
-          key={location}
-          initial={{ opacity: 0.8, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.12, ease: 'easeOut' }}
-          className="w-full h-full"
-        >
-          <Switch>
-            <Route path="/" component={Home} />
-            <Route path="/subjects/:id" component={SubjectDetail} />
-            <Route path="/timeline" component={Timeline} />
-            <Route path="/analytics" component={Analytics} />
-            <Route path="/settings" component={Settings} />
-            <Route component={NotFound} />
-          </Switch>
-        </motion.main>
+        <PullToRefresh onRefresh={handleRefresh}>
+          <motion.main
+            key={location}
+            initial={{ opacity: 0.8, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
+            className="w-full h-full"
+          >
+            <Switch>
+              <Route path="/" component={Home} />
+              <Route path="/subjects/:id" component={SubjectDetail} />
+              <Route path="/timeline" component={Timeline} />
+              <Route path="/analytics" component={Analytics} />
+              <Route path="/settings" component={Settings} />
+              <Route component={NotFound} />
+            </Switch>
+          </motion.main>
+        </PullToRefresh>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { db } from '@/db/database';
+import { db } from '@/db';
 import { getDailyAnkiPass } from '@/lib/anki';
 
 export interface NotificationSettings {
@@ -56,7 +56,7 @@ export async function getDueSpacedRepetitionTasks(): Promise<{
 
   // 2. Check Due System Revisions
   const now = new Date();
-  const allSystems = await db.systems.toArray();
+  const allSystems = await db.systems.toArray().then(res => res.filter(s => !s.deletedAt));
   const dueSystems = allSystems.filter(sys => {
     if (!sys.nextRevisionDate) return false;
     const nextDate = new Date(sys.nextRevisionDate);

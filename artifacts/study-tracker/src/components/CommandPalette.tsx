@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
-import { useSubjects, useAllSystems } from '@/db/hooks';
+import { useSubjects, useAllSystems } from '@/db';
 import { runSearch } from '@/lib/searchUtils';
-import { StudySystem } from '@/db/database';
+import { StudySystem } from '@/db';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,7 @@ import {
   Settings as SettingsIcon,
   Command,
 } from 'lucide-react';
-import { isRevisionDue, isRevisionOverdue } from '@/db/revisionEngine';
+import { isRevisionDue, isRevisionOverdue } from '@/db';
 
 interface QuickPage {
   name: string;
@@ -72,7 +72,10 @@ export function CommandPalette() {
       return {
         pages: PAGES,
         subjects: subjects.slice(0, 5),
-        systems: systems.slice(0, 5),
+        systems: systems.slice(0, 5).map(sys => {
+          const sub = subjects.find(s => s.id === sys.subjectId);
+          return { ...sys, subjectName: sub?.name ?? 'Unknown' };
+        }),
       };
     }
     const searchRes = runSearch(query, subjects, systems);

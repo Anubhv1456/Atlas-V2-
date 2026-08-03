@@ -1,88 +1,26 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Subject, StudySystem, HistoryEntry, PYQYear, ScoreLog } from './database';
-import { SystemStatus } from './database';
+import { db } from './schema';
+import { Subject, StudySystem, UIPreference, HistoryEntry, PYQYear, ScoreLog } from './types';
+import { SystemStatus } from './types';
 import { scheduleFirstRevision, scheduleNextRevision, isRevisionDue, today, sortSystemsByRevisionPriority, calculateDurationMultiplier, getActiveRevisionSystems } from './revisionEngine';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-
-export function useSubjects() {
-  const subjects = useLiveQuery(() => db.subjects.toArray()) ?? [];
-  return [...subjects].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+import { generateHLC } from '../lib/hlc';
+async function updateUIPref(type: 'subject' | 'system', entityId: number, updates: Partial<UIPreference>) {
+  const prefId = `${type}:${entityId}`;
+  const existing = await db.uiPreferences.get(prefId);
+  if (existing) {
+    await db.uiPreferences.update(prefId, { ...updates, updatedAt: new Date(), hlc: generateHLC() });
+  } else {
+    await db.uiPreferences.add({
+      id: prefId,
+      type,
+      entityId,
+      ...updates,
+      updatedAt: new Date(), hlc: generateHLC()
+    });
+  }
 }
-
-export function useSubject(id: number) {
-  return useLiveQuery(() => db.subjects.get(id), [id]);
-}
-
-export function useSystemsBySubject(subjectId: number) {
-  return useLiveQuery(() => db.systems.where('subjectId').equals(subjectId).toArray(), [subjectId]) ?? [];
-}
-
-export function useAllSystems() {
-  return useLiveQuery(() => db.systems.toArray()) ?? [];
-}
-
-export function useSystem(id: number) {
-  return useLiveQuery(() => db.systems.get(id), [id]);
-}
-
-export function useHistory() {
-  return useLiveQuery(() => db.history.orderBy('completedAt').reverse().toArray()) ?? [];
-}
-
-export function useHistoryByMonth(year: number, month: number) {
-  return useLiveQuery(() => {
-    const start = new Date(year, month, 1);
-    const end   = new Date(year, month + 1, 1);
-    return db.history
-      .where('completedAt')
-      .between(start, end, true, false)
-      .reverse()
-      .toArray();
-  }, [year, month]) ?? [];
-}
-
-export function useEarliestHistoryDate(): Date | null {
-  return useLiveQuery(async () => {
-    const entry = await db.history.orderBy('completedAt').first();
-    return entry ? new Date(entry.completedAt) : null;
-  }) ?? null;
-}
-
-/** All systems that have a revision due today or overdue. */
-export function useRevisionsDue(): StudySystem[] {
-  const systems = useLiveQuery(() => db.systems.toArray()) ?? [];
-  const now = today();
-  return systems.filter(s => isRevisionDue(s, now));
-}
-
-/** Systems currently in active multi-day revision. */
-export function useActiveRevisions(): StudySystem[] {
-  return useLiveQuery(() => db.systems.where('revisionState').equals('in_progress').toArray()) ?? [];
-}
-
-/** All PYQ years for a specific subject, ordered by year label. */
-export function usePYQsBySubject(subjectId: number): PYQYear[] {
-  return useLiveQuery(
-    () => db.pyqYears.where('subjectId').equals(subjectId).sortBy('year'),
-    [subjectId],
-  ) ?? [];
-}
-
-/** All PYQ years across all subjects. */
-export function useAllPYQs(): PYQYear[] {
-  return useLiveQuery(() => db.pyqYears.toArray()) ?? [];
-}
-
-/** All score logs for a specific subject. */
-export function useScoreLogsBySubject(subjectId: number): ScoreLog[] {
-  return useLiveQuery(
-    () => db.scoreLogs.where('subjectId').equals(subjectId).toArray(),
-    [subjectId]
-  ) ?? [];
-}
-
-// ── Actions ────────────────────────────────────────────────────────────────
 
 export async function addSubject(name: string) {
   const existingSubjects = await db.subjects.toArray();
@@ -91,39 +29,37 @@ export async function addSubject(name: string) {
     name,
     order: maxOrder + 1,
     createdAt: new Date(),
-    updatedAt: new Date(),
+    updatedAt: new Date(), hlc: generateHLC(),
   });
 }
 
 export async function updateSubjectsOrder(updates: { id: number; order: number }[]) {
-  return await db.transaction('rw', db.subjects, async () => {
+  return await db.transaction('rw', db.uiPreferences, async () => {
     for (const update of updates) {
-      await db.subjects.update(update.id, { order: update.order, updatedAt: new Date() });
+      await updateUIPref('subject', update.id, { order: update.order });
     }
   });
 }
 
 export async function updateSubject(id: number, name: string) {
-  return await db.subjects.update(id, { name, updatedAt: new Date() });
+  return await db.subjects.update(id, { name, updatedAt: new Date(), hlc: generateHLC() });
 }
 
 export async function deleteSubject(id: number) {
   await db.transaction('rw', db.subjects, db.systems, db.history, db.pyqYears, async () => {
-    await db.history.where('subjectId').equals(id).delete();
-    await db.systems.where('subjectId').equals(id).delete();
-    await db.pyqYears.where('subjectId').equals(id).delete();
-    await db.subjects.delete(id);
+    await db.history.where('subjectId').equals(id).modify({ deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
+    await db.systems.where('subjectId').equals(id).modify({ deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
+    await db.pyqYears.where('subjectId').equals(id).modify({ deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
+    await db.subjects.update(id, { deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
   });
 }
 
 export async function addSystem(subjectId: number, name: string) {
-  const existingSystems = await db.systems.where('subjectId').equals(subjectId).toArray();
-  const maxOrder = existingSystems.reduce((max, sys) => Math.max(max, sys.order ?? 0), -1);
-
-  return await db.systems.add({
+  const existingPrefs = await db.uiPreferences.where('type').equals('system').toArray();
+  const maxOrder = existingPrefs.reduce((max, sys) => Math.max(max, sys.order ?? 0), -1);
+  const id = await db.systems.add({
     subjectId,
     name,
-    order: maxOrder + 1,
     contentInitialized: false,
     contentUnitsTotal: 0,
     contentUnitsCompleted: 0,
@@ -131,80 +67,76 @@ export async function addSystem(subjectId: number, name: string) {
     qbankDone: false,
     weakAreas: '',
     status: 'Average',
-    updatedAt: new Date(),
+    updatedAt: new Date(), hlc: generateHLC(),
     completionDate: null,
     revisionCount: 0,
     lastRevisionDate: null,
     currentRevisionInterval: null,
     nextRevisionDate: null,
   });
+  await updateUIPref('system', id, { order: maxOrder + 1, focus: null });
+  return id;
 }
 
 export async function updateSystem(id: number, changes: Partial<StudySystem>) {
-  return await db.systems.update(id, { ...changes, updatedAt: new Date() });
+  if ('focus' in changes || 'order' in changes) {
+    const prefUpdates: any = {};
+    if ('focus' in changes) { prefUpdates.focus = changes.focus; delete changes.focus; }
+    if ('order' in changes) { prefUpdates.order = changes.order; delete changes.order; }
+    await updateUIPref('system', id, prefUpdates);
+  }
+  return await db.systems.update(id, { ...changes, updatedAt: new Date(), hlc: generateHLC() });
 }
 
 export async function updateSystemsOrder(updates: { id: number; order: number }[]) {
-  return await db.transaction('rw', db.systems, async () => {
+  return await db.transaction('rw', db.uiPreferences, async () => {
     for (const update of updates) {
-      await db.systems.update(update.id, { order: update.order, updatedAt: new Date() });
+      await updateUIPref('system', update.id, { order: update.order });
     }
   });
 }
 
 /** Set focus mode for a system, ensuring only one primary and one secondary exist at a time. */
+
 export async function setFocus(id: number, focus: 'primary' | 'secondary' | null) {
-  return await db.transaction('rw', db.subjects, db.systems, async () => {
+  return await db.transaction('rw', db.uiPreferences, async () => {
     if (focus) {
-      const existingSubjects = await db.subjects.filter(s => s.focus === focus).toArray();
-      for (const sub of existingSubjects) {
-        await db.subjects.update(sub.id!, { focus: null });
-      }
-      const existing = await db.systems.filter(s => s.focus === focus).toArray();
-      for (const sys of existing) {
-        if (sys.id !== id) {
-          await db.systems.update(sys.id!, { focus: null });
-        }
+      const existing = await db.uiPreferences.filter(p => p.focus === focus).toArray();
+      for (const p of existing) {
+        await updateUIPref(p.type, p.entityId, { focus: null });
       }
     }
-    await db.systems.update(id, { focus, updatedAt: new Date() });
+    await updateUIPref('system', id, { focus });
   });
 }
 
-/** Set focus mode for a subject, unsetting any other subject or system with that focus type. */
 export async function setSubjectFocus(subjectId: number, focus: 'primary' | 'secondary' | null) {
-  return await db.transaction('rw', db.subjects, db.systems, async () => {
+  return await db.transaction('rw', db.uiPreferences, async () => {
     if (focus) {
-      const existingSubjects = await db.subjects.filter(s => s.focus === focus).toArray();
-      for (const sub of existingSubjects) {
-        if (sub.id !== subjectId) {
-          await db.subjects.update(sub.id!, { focus: null });
-        }
-      }
-      const existingSystems = await db.systems.filter(s => s.focus === focus).toArray();
-      for (const sys of existingSystems) {
-        await db.systems.update(sys.id!, { focus: null });
+      const existing = await db.uiPreferences.filter(p => p.focus === focus).toArray();
+      for (const p of existing) {
+        await updateUIPref(p.type, p.entityId, { focus: null });
       }
     }
-    await db.subjects.update(subjectId, { focus, updatedAt: new Date() });
+    await updateUIPref('subject', subjectId, { focus });
   });
 }
 
 export async function deleteSystem(id: number) {
   await db.transaction('rw', db.systems, db.history, async () => {
-    await db.history.where('systemId').equals(id).delete();
-    await db.systems.delete(id);
+    await db.history.where('systemId').equals(id).modify({ deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
+    await db.systems.update(id, { deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
   });
 }
 
 export async function logCompletion(entry: Omit<HistoryEntry, 'id'>) {
-  return await db.history.add(entry);
+  return await db.history.add({ ...entry, updatedAt: new Date(), hlc: generateHLC() });
 }
 
 export async function deleteHistoryEntry(id: number) {
   return await db.transaction('rw', db.history, db.systems, db.pyqYears, async () => {
     const entry = await db.history.get(id);
-    if (!entry) return;
+    if (!entry || entry.deletedAt) return;
 
     if (entry.taskKey === 'qbankDone' && entry.systemId) {
       const sys = await db.systems.get(entry.systemId);
@@ -213,7 +145,7 @@ export async function deleteHistoryEntry(id: number) {
           qbankDone: false,
           completionDate: null,
           nextRevisionDate: null,
-          updatedAt: new Date(),
+          updatedAt: new Date(), hlc: generateHLC(),
         });
       }
     } else if ((entry.taskKey === 'contentDone' || entry.taskKey === 'contentProgress') && entry.systemId) {
@@ -234,7 +166,7 @@ export async function deleteHistoryEntry(id: number) {
           contentCompleted: false,
           completionDate: null,
           nextRevisionDate: null,
-          updatedAt: new Date(),
+          updatedAt: new Date(), hlc: generateHLC(),
         });
       }
     } else if (entry.taskKey === 'pyqsDone' && entry.subjectId) {
@@ -253,7 +185,7 @@ export async function deleteHistoryEntry(id: number) {
         const remainingRevisions = await db.history
           .where('systemId')
           .equals(entry.systemId)
-          .filter(h => h.id !== id && h.taskKey === 'revision')
+          .filter(h => h.id !== id && h.taskKey === 'revision' && !h.deletedAt)
           .toArray();
 
         remainingRevisions.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
@@ -276,12 +208,12 @@ export async function deleteHistoryEntry(id: number) {
           revisionCount: newRevCount,
           lastRevisionDate,
           nextRevisionDate,
-          updatedAt: new Date(),
+          updatedAt: new Date(), hlc: generateHLC(),
         });
       }
     }
 
-    await db.history.delete(id);
+    await db.history.update(id, { deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
   });
 }
 
@@ -321,12 +253,12 @@ export async function addPYQYearBatch(subjectId: number, years: string[]) {
 
 /** Rename a PYQ year entry. */
 export async function updatePYQYear(id: number, year: string) {
-  return await db.pyqYears.update(id, { year: year.trim() });
+  return await db.pyqYears.update(id, { year: year.trim(), updatedAt: new Date(), hlc: generateHLC() });
 }
 
 /** Remove a PYQ year entry and its associated history. */
 export async function deletePYQYear(id: number) {
-  return await db.pyqYears.delete(id);
+  return await db.pyqYears.update(id, { deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
 }
 
 /**
@@ -342,7 +274,7 @@ export async function togglePYQYear(
 ) {
   const completed   = !currentlyCompleted;
   const completedAt = completed ? new Date() : null;
-  await db.pyqYears.update(id, { completed, completedAt });
+  await db.pyqYears.update(id, { completed, completedAt, updatedAt: new Date(), hlc: generateHLC() });
   if (completed) {
     await logCompletion({
       subjectId,
@@ -358,10 +290,10 @@ export async function togglePYQYear(
     const matching = await db.history
       .where('subjectId')
       .equals(subjectId)
-      .filter(h => h.taskKey === 'pyqsDone' && h.taskLabel.includes(year))
+      .filter(h => h.taskKey === 'pyqsDone' && h.taskLabel.includes(year) && !h.deletedAt)
       .toArray();
     for (const entry of matching) {
-      if (entry.id) await db.history.delete(entry.id);
+      if (entry.id) await db.history.update(entry.id, { deletedAt: new Date(), updatedAt: new Date(), hlc: generateHLC() });
     }
   }
 }
@@ -414,7 +346,7 @@ export async function toggleSystemLengthy(systemId: number, isLengthy: boolean) 
  */
 export async function startActiveRevision(systemId: number, initialProgressPct = 15) {
   const sys = await db.systems.get(systemId);
-  if (!sys) return;
+  if (!sys || sys.deletedAt) return;
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const changes: Partial<StudySystem> = {
@@ -482,7 +414,7 @@ export async function completeRevision(
   systemName: string,
 ) {
   const sys = await db.systems.get(systemId);
-  if (!sys) return;
+  if (!sys || sys.deletedAt) return;
 
   const now = today();
   const previousInterval = sys.currentRevisionInterval ?? 12;
@@ -536,37 +468,4 @@ export async function completeRevision(
 
 export async function clearHistory() {
   return await db.history.clear();
-}
-
-export function useCurrentStreak(): number {
-  return useLiveQuery(async () => {
-    const history = await db.history.orderBy('completedAt').reverse().toArray();
-    if (history.length === 0) return 0;
-
-    let streak = 0;
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-
-    const dates = new Set(history.map(entry => {
-      const d = new Date(entry.completedAt);
-      d.setHours(0, 0, 0, 0);
-      return d.getTime();
-    }));
-
-    // Check if there is an entry for today. If not, maybe yesterday?
-    let timeToCheck = currentDate.getTime();
-    if (!dates.has(timeToCheck)) {
-      // Allow streak to continue if they haven't done anything today yet, but did yesterday.
-      timeToCheck -= 86400000;
-      if (!dates.has(timeToCheck)) {
-        return 0; // Missed yesterday and today
-      }
-    }
-
-    while (dates.has(timeToCheck)) {
-      streak++;
-      timeToCheck -= 86400000; // Move back one day
-    }
-    return streak;
-  }) ?? 0;
 }

@@ -1,5 +1,5 @@
-import { StudySystem, Subject } from '@/db/database';
-import { isRevisionDue, isRevisionOverdue, hasRevisionScheduled } from '@/db/revisionEngine';
+import { StudySystem, Subject } from '@/db';
+import { isRevisionDue, isRevisionOverdue, hasRevisionScheduled } from '@/db';
 
 export type Keyword = 'strong' | 'average' | 'weak' | 'revision' | 'due' | 'overdue' | 'completed';
 

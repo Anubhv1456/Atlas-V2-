@@ -32,7 +32,7 @@ async function deriveKeyWorker(passphrase: string, salt: Uint8Array): Promise<Cr
   return self.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as any,
       iterations: 100000,
       hash: 'SHA-256',
     },
@@ -58,7 +58,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const enc = new TextEncoder();
       const encryptedBuffer = await self.crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
+        { name: 'AES-GCM', iv: iv as any },
         key,
         enc.encode(plainText)
       );
@@ -90,9 +90,9 @@ self.onmessage = async (e: MessageEvent) => {
       self.postMessage({ id, status: 'progress', progress: 50, stage: 'Decrypting payload...' });
 
       const decryptedBuffer = await self.crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
+        { name: 'AES-GCM', iv: iv as any },
         key,
-        encryptedData
+        encryptedData as any
       );
 
       const dec = new TextDecoder();

@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+// @ts-ignore
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './index.css';
@@ -9,10 +10,10 @@ if (import.meta.env.PROD) {
   try {
     registerSW({
       immediate: true,
-      onRegisteredSW(swScriptUrl, registration) {
+      onRegisteredSW(swScriptUrl: string, registration: ServiceWorkerRegistration | undefined) {
         console.log('[PWA] Service worker registered successfully at:', swScriptUrl);
       },
-      onRegisterError(error) {
+      onRegisterError(error: any) {
         console.warn('[PWA] Service worker registration error:', error);
       },
     });

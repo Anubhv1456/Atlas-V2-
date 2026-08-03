@@ -1,4 +1,4 @@
-import { StudySystem, SystemStatus } from './database';
+import { StudySystem, SystemStatus } from './types';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 // All values are in days. Adjust here to change global behavior.

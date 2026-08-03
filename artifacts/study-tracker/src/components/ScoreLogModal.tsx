@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, ScoreLog } from '@/db/database';
+import { db, ScoreLog } from '@/db';
 import {
   Dialog,
   DialogContent,
@@ -39,9 +39,9 @@ export function ScoreLogModal({
   onSuccess,
 }: ScoreLogModalProps) {
   const { toast } = useToast();
-  const subjects = useLiveQuery(() => db.subjects.toArray(), []) || [];
-  const systems = useLiveQuery(() => db.systems.toArray(), []) || [];
-  const pyqYears = useLiveQuery(() => db.pyqYears.toArray(), []) || [];
+  const subjects = useLiveQuery(() => db.subjects.toArray().then(res => res.filter(s => !s.deletedAt)), []) || [];
+  const systems = useLiveQuery(() => db.systems.toArray().then(res => res.filter(s => !s.deletedAt)), []) || [];
+  const pyqYears = useLiveQuery(() => db.pyqYears.toArray().then(res => res.filter(p => !p.deletedAt)), []) || [];
 
   const [type, setType] = useState<'revision' | 'pyq'>(initialType);
   const [subjectId, setSubjectId] = useState<number | undefined>(initialSubjectId);

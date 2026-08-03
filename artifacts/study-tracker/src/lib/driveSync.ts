@@ -1,4 +1,5 @@
-import { exportData, importData, mergeData, MergeStats } from '../db/database';
+import { exportData, importData } from '../db';
+import { mergeData, MergeStats } from './syncEngine';
 
 const CLIENT_ID = '983844880865-imtckeuh0e5a7t0ongkg2ofe3gelbtmi.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';

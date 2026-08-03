@@ -5,12 +5,12 @@ import {
   useSubject, useSystemsBySubject, usePYQsBySubject, useScoreLogsBySubject,
   addSystem, updateSubject, deleteSubject, updateSystemsOrder,
   addPYQYear, addPYQYearBatch, updatePYQYear, deletePYQYear, togglePYQYear,
-} from '@/db/hooks';
+} from '@/db';
 import { SystemCard } from '@/components/SystemCard';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { AddDialog } from '@/components/AddDialog';
 import { ProgressBar } from '@/components/ProgressBar';
-import { PYQYear } from '@/db/database';
+import { PYQYear } from '@/db';
 import { ScoreLogModal } from '@/components/ScoreLogModal';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Trash2, Edit2,
@@ -21,9 +21,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { StudySystem } from '@/db/database';
+import { StudySystem } from '@/db';
 import { cn } from '@/lib/utils';
 import { calculateSubjectProgress } from '@/lib/progress';
+import { usePYQSectionLogic, useSubjectDetailLogic } from './SubjectDetail.hooks';
 import { validateNumberOfYears, validateYearInput } from '@/lib/validation';
 
 type StageKey = 'contentCompleted' | 'qbankDone';
@@ -37,117 +38,28 @@ interface PYQSectionProps {
 }
 
 function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
-  const [expanded,             setExpanded]             = useState(true);
-  const [viewMode,             setViewMode]             = useState<'grid' | 'list'>('grid');
-  const [showAdd,              setShowAdd]              = useState(false);
-  const [addValue,             setAddValue]             = useState('');
-  const [editTarget,           setEditTarget]           = useState<PYQYear | null>(null);
-  const [editValue,            setEditValue]            = useState('');
-  const [pyqToDelete,          setPyqToDelete]          = useState<PYQYear | null>(null);
-  const [showPYQDeleteConfirm, setShowPYQDeleteConfirm]  = useState(false);
-  const [scoreModalPyq,        setScoreModalPyq]        = useState<PYQYear | null>(null);
-
-  // Preset / Range Generator state
-  const [showPresetModal,      setShowPresetModal]      = useState(false);
-  const currentYearNum                                  = new Date().getFullYear();
-  const [presetEndYear,        setPresetEndYear]        = useState<string>(String(currentYearNum));
-  const [presetSpan,           setPresetSpan]           = useState<string>('5');
-  const [presetPrefix,         setPresetPrefix]         = useState<string>('');
-
-  // Fetch score logs for linking scores to PYQ year cards
-  const scoreLogs = useScoreLogsBySubject(subjectId);
-
-  // Map each PYQYear to its latest score log
-  const yearScoreMap = useMemo(() => {
-    const map = new Map<number, { percentage: number; score: number; total: number; timestamp: Date }>();
-    for (const log of scoreLogs) {
-      if (log.type === 'pyq' && log.pyqYearId) {
-        const existing = map.get(log.pyqYearId);
-        if (!existing || new Date(log.timestamp).getTime() > new Date(existing.timestamp).getTime()) {
-          map.set(log.pyqYearId, {
-            percentage: log.percentage,
-            score: log.score,
-            total: log.total,
-            timestamp: log.timestamp,
-          });
-        }
-      }
-    }
-    return map;
-  }, [scoreLogs]);
-
-  const completed = years.filter(y => y.completed).length;
-  const total     = years.length;
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const handleAdd = async () => {
-    const v = addValue.trim();
-    if (!v) return;
-    await addPYQYear(subjectId, v);
-    setAddValue(''); setShowAdd(false);
-  };
-
-  const handleQuickAdd5YearDefaults = async () => {
-    const generated: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      generated.push(`${currentYearNum - i}`);
-    }
-    await addPYQYearBatch(subjectId, generated);
-  };
-
-  // Validation states for PYQ Year Range dialog
-  const spanValidation = validateNumberOfYears(presetSpan, { min: 1, max: 30, fieldName: 'Number of years' });
-  const endYearValidation = validateYearInput(presetEndYear, { minYear: 1950, maxYear: currentYearNum + 10, fieldName: 'Latest year' });
-
-  const handleGenerateCustomRange = async () => {
-    if (!spanValidation.isValid || !endYearValidation.isValid) return;
-    const end = endYearValidation.value;
-    const span = spanValidation.value;
-    const generated: string[] = [];
-    const prefixStr = presetPrefix.trim() ? `${presetPrefix.trim()} ` : '';
-
-    for (let i = 0; i < span; i++) {
-      generated.push(`${prefixStr}${end - i}`);
-    }
-
-    await addPYQYearBatch(subjectId, generated);
-    setShowPresetModal(false);
-  };
-
-  const handleEditSave = async () => {
-    if (!editTarget || !editValue.trim()) return;
-    await updatePYQYear(editTarget.id!, editValue.trim());
-    setEditTarget(null); setEditValue('');
-  };
-
-  const handlePYQDeleteClick = (year: PYQYear) => {
-    setPyqToDelete(year);
-    setShowPYQDeleteConfirm(true);
-  };
-
-  const handlePYQDeleteConfirm = async () => {
-    if (pyqToDelete) {
-      setShowPYQDeleteConfirm(false);
-      await deletePYQYear(pyqToDelete.id!);
-      setPyqToDelete(null);
-    }
-  };
-
-  const handleToggle = (year: PYQYear) => {
-    const wasCompleted = year.completed;
-    togglePYQYear(year.id!, subjectId, subjectName, year.year, wasCompleted);
-    if (!wasCompleted) {
-      setScoreModalPyq(year);
-    }
-  };
-
-  const handleMarkAllComplete = async () => {
-    for (const y of years) {
-      if (!y.completed && y.id) {
-        await togglePYQYear(y.id, subjectId, subjectName, y.year, false);
-      }
-    }
-  };
+  const {
+    expanded, setExpanded,
+    viewMode, setViewMode,
+    showAdd, setShowAdd,
+    addValue, setAddValue,
+    editTarget, setEditTarget,
+    editValue, setEditValue,
+    pyqToDelete, setPyqToDelete,
+    showPYQDeleteConfirm, setShowPYQDeleteConfirm,
+    scoreModalPyq, setScoreModalPyq,
+    showPresetModal, setShowPresetModal,
+    currentYearNum,
+    presetEndYear, setPresetEndYear,
+    presetSpan, setPresetSpan,
+    presetPrefix, setPresetPrefix,
+    yearScoreMap,
+    completed, total, percentage,
+    handleAdd, handleQuickAdd5YearDefaults,
+    spanValidation, endYearValidation, handleGenerateCustomRange,
+    handleEditSave, handlePYQDeleteClick, handlePYQDeleteConfirm,
+    handleToggle, handleMarkAllComplete
+  } = usePYQSectionLogic(subjectId, subjectName, years);
 
   const handleResetAll = async () => {
     for (const y of years) {
@@ -724,94 +636,24 @@ const STAGES = [
 ];
 
 export default function SubjectDetail() {
-  const { id }  = useParams<{ id: string }>();
-  const search  = useSearch();
-  const subjectId = parseInt(id || '0', 10);
-  const [, setLocation] = useLocation();
-
-  const subject  = useSubject(subjectId);
-  const rawSystems  = useSystemsBySubject(subjectId);
-  const pyqYears = usePYQsBySubject(subjectId);
-
-  const systems = useMemo(() => {
-    return [...rawSystems].sort((a, b) => (a.order ?? Number.MAX_VALUE) - (b.order ?? Number.MAX_VALUE));
-  }, [rawSystems]);
-
-  const [showAddSystem, setShowAddSystem] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showEdit,      setShowEdit]      = useState(false);
-  const [editName,      setEditName]      = useState('');
-  const [activeFilter,  setActiveFilter]  = useState<StageKey | null>(null);
-
-  // Read highlight param — passed from search results
-  const highlightId = (() => {
-    const params = new URLSearchParams(search);
-    const v = params.get('highlight');
-    return v ? parseInt(v, 10) : null;
-  })();
-
-  const handleDragEnd = async (result: DropResult) => {
-    if (!result.destination) return;
-    
-    // We only support reordering when no filter is active to prevent confusion
-    if (activeFilter !== null) return;
-    
-    const items = Array.from(systems);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    const updates = items.map((item, index) => ({
-      id: item.id!,
-      order: index
-    }));
-    
-    await updateSystemsOrder(updates);
-  };
+  const { id } = useParams<{ id: string }>();
+  const {
+    subjectId, subject, systems, pyqYears,
+    showAddSystem, setShowAddSystem,
+    showDeleteConfirm, setShowDeleteConfirm,
+    showEdit, setShowEdit,
+    editName, setEditName,
+    activeFilter, setActiveFilter,
+    highlightId, handleDragEnd,
+    totalTasks, completedTasks, progress,
+    pyqUnlocked, stagePct, visibleSystems,
+    handleDonutClick, handleSaveEdit, handleDelete, handleDeleteConfirm
+  } = useSubjectDetailLogic(id);
 
   if (!subject && id) {
     return <div className="p-8 text-center text-muted-foreground mt-20">Loading or subject not found.</div>;
   }
   if (!subject) return null;
-
-  // Overall progress (2 steps per system)
-  const totalTasks     = systems.length * 2;
-  const completedTasks = systems.reduce((acc, sys) => {
-    let done = 0;
-    if (sys.contentCompleted) done++;
-    if (sys.qbankDone) done++;
-    return acc + done;
-  }, 0);
-  const progress = calculateSubjectProgress(systems);
-
-  // PYQ unlock: every system must have content + qbank complete
-  const pyqUnlocked = systems.length > 0 && systems.every(s => s.contentCompleted && s.qbankDone);
-
-  const stagePct = (key: StageKey) => {
-    if (systems.length === 0) return 0;
-    return Math.round((systems.filter(s => s[key]).length / systems.length) * 100);
-  };
-
-  const visibleSystems: StudySystem[] = activeFilter
-    ? systems.filter(s => !s[activeFilter])
-    : systems;
-
-  const handleDonutClick = (key: StageKey) => {
-    setActiveFilter(prev => (prev === key ? null : key));
-  };
-
-  const handleSaveEdit = async () => {
-    if (editName.trim()) {
-      await updateSubject(subject.id!, editName.trim());
-      setShowEdit(false);
-    }
-  };
-
-  const handleDelete = () => { setShowDeleteConfirm(true); };
-  const handleDeleteConfirm = async () => {
-    setShowDeleteConfirm(false);
-    await deleteSubject(subject.id!);
-    setLocation('/');
-  };
 
   return (
     <div className="min-h-full bg-background px-4 pt-10 pb-28 max-w-2xl mx-auto flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">

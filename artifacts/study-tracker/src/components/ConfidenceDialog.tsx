@@ -1,4 +1,4 @@
-import { SystemStatus } from '@/db/database';
+import { SystemStatus } from '@/db';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 

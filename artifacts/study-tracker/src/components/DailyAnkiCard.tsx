@@ -10,8 +10,8 @@ import {
   launchAnkiDeck,
   DailyAnkiPassState,
 } from '@/lib/anki';
-import { Subject, StudySystem } from '@/db/database';
-import { isRevisionDue } from '@/db/revisionEngine';
+import { Subject, StudySystem } from '@/db';
+import { isRevisionDue } from '@/db';
 
 interface DailyAnkiCardProps {
   subjects: Subject[];

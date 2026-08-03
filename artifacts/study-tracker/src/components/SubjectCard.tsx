@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { Subject, StudySystem } from '@/db/database';
+import { Subject, StudySystem } from '@/db';
 import { ProgressBar } from './ProgressBar';
 import { ChevronRight, GripVertical, BookOpen, CheckCircle2, MoreVertical, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import { StudySystem } from '@/db/database';
+import { StudySystem } from '@/db';
 
 /**
  * Calculates a single system's progress percentage (0 - 100).

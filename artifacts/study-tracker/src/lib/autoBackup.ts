@@ -1,4 +1,4 @@
-import { exportData, importData } from '@/db/database';
+import { exportData, importData } from '@/db';
 import { getAccessToken, syncWithDrive } from '@/lib/driveSync';
 
 const SNAPSHOTS_KEY = 'atlas_auto_snapshots_v1';
