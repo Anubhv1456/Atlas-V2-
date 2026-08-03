@@ -21,6 +21,7 @@ import {
 import { ChevronLeft, ChevronRight, BookOpen, Layers, CalendarDays, Clock, AlertCircle, CheckCircle2, Sparkles, Filter, Activity, TrendingUp, Flame, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { isRevisionUpcoming, isRevisionOverdue, isRevisionDueToday, daysOverdue, sortSystemsByRevisionPriority } from '@/db';
 import { toast } from 'sonner';
 import {
@@ -394,17 +395,13 @@ export default function Timeline() {
           )}
 
           {everythingEmpty && (
-            <div className="text-center py-14 px-4 bg-card/30 rounded-xl border border-border/50">
-              <div className="w-12 h-12 flex items-center justify-center mx-auto mb-4 opacity-50">
-                <CalendarDays className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <p className="font-semibold text-foreground mb-1 text-sm">Nothing here yet</p>
-              <p className="text-xs text-muted-foreground">
-                {filter !== 'all'
-                  ? `No ${TIMELINE_FILTERS.find(f => f.key === filter)!.label} events for ${format(calDate, 'MMMM yyyy')}.`
-                  : `No activity recorded for ${format(calDate, 'MMMM yyyy')}.`}
-              </p>
-            </div>
+            <EmptyStateGraphic
+              icon={CalendarDays}
+              title="No Timeline Activity"
+              description={filter !== 'all'
+                  ? `No ${TIMELINE_FILTERS.find(f => f.key === filter)!.label} events recorded in ${format(calDate, 'MMMM yyyy')}.`
+                  : `Start logging your study tasks, completing revisions, or solving PYQs to populate your activity timeline for ${format(calDate, 'MMMM yyyy')}.`}
+            />
           )}
         </div>
       </div>

@@ -202,36 +202,33 @@ function PYQSection({ subjectId, subjectName, years }: PYQSectionProps) {
 
             {/* Empty State with 1-click Preset Seed */}
             {years.length === 0 ? (
-              <div className="text-center py-6 px-4 bg-muted/20 border border-dashed border-border/80 rounded-2xl space-y-3">
-                <div className="p-3 w-12 h-12 mx-auto rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                  <BookOpen className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-foreground text-sm">No PYQ Years Configured</p>
-                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                    Generate the standard 5-year PYQ grid (e.g. {currentYearNum-4} to {currentYearNum}) or add custom years for NEET PG / INI-CET preparation.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    onClick={handleQuickAdd5YearDefaults}
-                    className="rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white gap-1.5 shadow-2xs"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Generate Last 5 Years ({currentYearNum-4}–{currentYearNum})</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowAdd(true)}
-                    className="rounded-xl text-xs font-semibold border-border/80"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Single Year</span>
-                  </Button>
-                </div>
-              </div>
+              <EmptyStateGraphic
+                icon={BookOpen}
+                title="No PYQ Years Configured"
+                description={`Generate the standard 5-year PYQ grid (e.g. ${currentYearNum-4} to ${currentYearNum}) or add custom years for NEET PG / INI-CET preparation.`}
+                className="py-6 bg-muted/20 border-border/80"
+                action={
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={handleQuickAdd5YearDefaults}
+                      className="rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white gap-1.5 shadow-2xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Generate Last 5 Years ({currentYearNum-4}–{currentYearNum})</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowAdd(true)}
+                      className="rounded-xl text-xs font-semibold border-border/80"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Single Year</span>
+                    </Button>
+                  </div>
+                }
+              />
             ) : viewMode === 'grid' ? (
               /* ── GRID VIEW (Responsive 5-Year Tile Grid) ──────────────── */
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
@@ -786,8 +783,8 @@ export default function SubjectDetail() {
         {systems.length === 0 ? (
           <EmptyStateGraphic
             icon={LayoutList}
-            title="No Systems Added Yet"
-            description={`Break down ${subject.name} into smaller, structured systems or sub-topics to track progress.`}
+            title="Start Structuring Your Subject"
+            description={`Break down ${subject.name} into specific modules or systems. This enables precise task tracking and unlocks spaced repetition tracking.`}
             action={
               <Button onClick={() => setShowAddSystem(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
                 <Plus className="w-4 h-4" /> Add First System

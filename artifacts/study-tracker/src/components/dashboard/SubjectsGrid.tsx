@@ -42,8 +42,8 @@ export function SubjectsGrid({
         {subjects.length === 0 ? (
           <EmptyStateGraphic
             icon={BookOpen}
-            title="Your Subject Library is Empty"
-            description="Add your first core medical or academic subject to organize topics, systems, and track revision schedules."
+            title="Start Building Your Library"
+            description="Create your first subject to begin mapping out topics, tracking tasks, and utilizing spaced repetition to maximize your retention."
             action={
               <Button onClick={() => setShowAddSubject(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
                 <Plus className="w-4 h-4" /> Add First Subject

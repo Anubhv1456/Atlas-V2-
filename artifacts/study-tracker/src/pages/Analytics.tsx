@@ -312,8 +312,8 @@ export default function Analytics() {
           {chartData.length === 0 ? (
             <EmptyStateGraphic
               icon={BarChart3}
-              title="No Score Logs Recorded"
-              description="Log your revision results or PYQ test marks to render your retention and progress curves."
+              title="Unlock Performance Analytics"
+              description="Log your revision results or PYQ test marks to unlock beautiful retention graphs and progress curves."
               action={
                 <Button onClick={() => setIsModalOpen(true)} size="sm" className="text-xs gap-1.5 rounded-xl shadow-xs">
                   <Plus className="w-3.5 h-3.5" /> Log First Score
