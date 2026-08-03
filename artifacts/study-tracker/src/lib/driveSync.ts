@@ -79,6 +79,10 @@ function restoreSession(): { user: any; token: string | null } {
   return { user: null, token: null };
 }
 
+let activeAuthResolve: ((res: any) => void) | null = null;
+let activeAuthReject: ((err: any) => void) | null = null;
+let isSilentRenewal = false;
+
 const loadGis = () => {
   return new Promise<void>((resolve) => {
     if (window.google && window.google.accounts) {
@@ -104,31 +108,53 @@ const setupTokenClient = async () => {
         if (response.error !== undefined) {
           console.error('GIS token error:', response);
           if (authFailureListener) authFailureListener();
+          if (activeAuthReject) {
+            activeAuthReject(new Error(response.error_description || response.error));
+            activeAuthReject = null;
+            activeAuthResolve = null;
+          }
           return;
         }
         const token = response.access_token;
         const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
 
-        try {
-          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const data = await res.json();
-          const user = {
-            displayName: data.name,
-            email: data.email,
-            photoURL: data.picture,
-            uid: data.sub
-          };
+        if (isSilentRenewal) {
+            saveSession(currentUser, token, expiresIn);
+            if (authStateListener) authStateListener(currentUser, token);
+            if (activeAuthResolve) activeAuthResolve(token);
+        } else {
+            try {
+              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              const data = await res.json();
+              const user = {
+                displayName: data.name,
+                email: data.email,
+                photoURL: data.picture,
+                uid: data.sub
+              };
 
-          saveSession(user, token, expiresIn);
+              saveSession(user, token, expiresIn);
 
-          if (authStateListener) authStateListener(currentUser, accessToken!);
-        } catch (err) {
-          console.error('Error fetching user info', err);
-          if (authFailureListener) authFailureListener();
+              if (authStateListener) authStateListener(currentUser, accessToken!);
+              if (activeAuthResolve) activeAuthResolve({ user: currentUser, accessToken: accessToken! });
+            } catch (err) {
+              console.error(err);
+              if (activeAuthReject) activeAuthReject(err);
+            }
         }
+        activeAuthResolve = null;
+        activeAuthReject = null;
       },
+      error_callback: (err: any) => {
+         console.warn('GIS error callback:', err);
+         if (activeAuthReject) {
+            activeAuthReject(new Error(err?.type || 'Authentication failed or popup closed'));
+         }
+         activeAuthResolve = null;
+         activeAuthReject = null;
+      }
     });
   }
 };
@@ -161,38 +187,15 @@ export const googleSignIn = (): Promise<{ user: any; accessToken: string } | nul
       return;
     }
 
-    tokenClient.callback = async (response: any) => {
-      if (response.error !== undefined) {
-        reject(new Error(response.error_description || response.error));
-        return;
-      }
-      const token = response.access_token;
-      const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
-
-      try {
-        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        const user = {
-          displayName: data.name,
-          email: data.email,
-          photoURL: data.picture,
-          uid: data.sub
-        };
-
-        saveSession(user, token, expiresIn);
-
-        if (authStateListener) authStateListener(currentUser, accessToken!);
-        resolve({ user: currentUser, accessToken: accessToken! });
-      } catch (err) {
-        reject(err);
-      }
-    };
+    isSilentRenewal = false;
+    activeAuthResolve = resolve;
+    activeAuthReject = reject;
 
     try {
-      tokenClient.requestAccessToken({ prompt: '' });
+      tokenClient.requestAccessToken();
     } catch (err) {
+      activeAuthResolve = null;
+      activeAuthReject = null;
       reject(err);
     }
   });
@@ -244,21 +247,22 @@ export const getAccessToken = async (): Promise<string | null> => {
         resolve(null);
         return;
       }
-      tokenClient.callback = (response: any) => {
+      
+      isSilentRenewal = true;
+      activeAuthResolve = (token: string) => {
         if (isResolved) return;
         isResolved = true;
         clearTimeout(timeoutId);
-        if (response.error !== undefined) {
-          console.warn('Silent token renewal failed', response);
-          resolve(null);
-          return;
-        }
-        const token = response.access_token;
-        const expiresIn = response.expires_in ? Number(response.expires_in) : 3600;
-        saveSession(currentUser, token, expiresIn);
-        if (authStateListener) authStateListener(currentUser, token);
         resolve(token);
       };
+      activeAuthReject = (err: any) => {
+        if (isResolved) return;
+        isResolved = true;
+        clearTimeout(timeoutId);
+        console.warn('Silent token renewal failed', err);
+        resolve(null);
+      };
+
       try {
         // 'none' prevents any UI. If consent or login is required, it returns an error.
         tokenClient.requestAccessToken({ prompt: 'none' });
@@ -272,7 +276,6 @@ export const getAccessToken = async (): Promise<string | null> => {
       }
     });
   }
-
   return null;
 };
 
