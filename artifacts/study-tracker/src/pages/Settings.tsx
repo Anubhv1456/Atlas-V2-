@@ -6,7 +6,8 @@ import {
   AutoBackupSection,
   ManualBackupSection,
   SecuritySection,
-  DangerZoneSection
+  DangerZoneSection,
+  PresetsSection
 } from './settings';
 
 export default function Settings() {
@@ -18,9 +19,9 @@ export default function Settings() {
           Manage your app experience, backup your data, and secure your study progress.
         </p>
       </header>
-
       <div className="space-y-10 flex-1">
         <AppearanceSection />
+        <PresetsSection />
         <PWASection />
         <NotificationsSection />
         <CloudSyncSection />

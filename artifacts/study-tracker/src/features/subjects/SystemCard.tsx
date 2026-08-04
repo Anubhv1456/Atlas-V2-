@@ -71,7 +71,7 @@ export function SystemCard(props: SystemCardProps) {
     <>
       <div ref={cardRef} className={cn(
         'bg-card rounded-xl border border-border shadow-sm overflow-hidden transition-all duration-300',
-        system.status === 'Strong' && 'border-[hsl(var(--gold))]/30',
+        (system.status || 'Average') === 'Strong' && 'border-[hsl(var(--gold))]/30',
         revisionOverdue && 'border-destructive/50',
         revisionDue && !revisionOverdue && 'border-amber-500/25',
         highlighted && 'ring-1 ring-primary ring-offset-2 ring-offset-background',
@@ -135,8 +135,8 @@ export function SystemCard(props: SystemCardProps) {
             <div className="flex-1 min-w-0 pr-2">
               <div className="flex items-center gap-2 sm:gap-3 mb-1.5 min-w-0 flex-wrap sm:flex-nowrap">
                 <h4 className="font-semibold text-base sm:text-lg leading-tight text-foreground truncate min-w-0">{system.name}</h4>
-                <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border shrink-0', statusColors[system.status])}>
-                  {system.status}
+                <span className={cn('text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border shrink-0', statusColors[system.status || 'Average'])}>
+                  {system.status || 'Average'}
                 </span>
                 {system.focus === 'primary' && (
                   <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium border border-primary/20 bg-primary/10 text-primary whitespace-nowrap shrink-0">
@@ -254,7 +254,7 @@ export function SystemCard(props: SystemCardProps) {
                     {(['Strong', 'Average', 'Weak'] as const).map(s => (
                       <button key={s} onClick={() => handleStatusChange(s)}
                         className={cn('flex-1 py-2 px-3 text-sm font-medium rounded-xl border transition-all',
-                          system.status === s ? statusColors[s] + ' ring-2 ring-offset-2 ring-background ring-offset-transparent shadow-sm' : 'bg-background border-border text-muted-foreground hover:bg-muted')}>
+                          (system.status || 'Average') === s ? statusColors[s] + ' ring-2 ring-offset-2 ring-background ring-offset-transparent shadow-sm' : 'bg-background border-border text-muted-foreground hover:bg-muted')}>
                         {s}
                       </button>
                     ))}

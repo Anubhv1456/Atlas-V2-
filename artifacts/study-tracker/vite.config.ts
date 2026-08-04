@@ -104,6 +104,9 @@ export default defineConfig({
           'lucide': ['lucide-react'],
           'dexie': ['dexie', 'dexie-react-hooks'],
           'vendor': ['react', 'react-dom', 'wouter', '@tanstack/react-query'],
+          'ui-libs': ['@radix-ui/react-accordion', '@radix-ui/react-dialog', '@radix-ui/react-popover', 'cmdk', 'sonner', 'embla-carousel-react'],
+          'form-libs': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          'date-libs': ['date-fns', 'react-day-picker'],
         }
       }
     }

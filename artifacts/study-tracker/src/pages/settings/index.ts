@@ -6,3 +6,4 @@ export * from './AutoBackupSection';
 export * from './ManualBackupSection';
 export * from './SecuritySection';
 export * from './DangerZoneSection';
+export * from './PresetsSection';

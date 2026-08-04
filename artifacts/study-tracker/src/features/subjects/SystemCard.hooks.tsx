@@ -224,7 +224,7 @@ export function useSystemCardLogic({
   const handleRevisionComplete = async () => {
     if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#10b981', '#059669', '#047857'] });
-    await completeRevision(system.id!, system.status, system.subjectId, subjectName, system.name);
+    await completeRevision(system.id!, (system.status || 'Average'), system.subjectId, subjectName, system.name);
     setShowScoreModal(true);
   };
 

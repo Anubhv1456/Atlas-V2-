@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster, toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 const NotFound = lazy(() => import('@/pages/not-found'));
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
@@ -90,13 +91,22 @@ function Router() {
   );
 }
 
-
 function App() {
   useEffect(() => {
     checkAndRunAutoBackup();
     triggerSpacedRepetitionNotification(false).catch(err => {
       console.warn('Background notification trigger suppressed:', err);
     });
+
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then(granted => {
+        if (granted) {
+          console.log("Storage will not be cleared except by explicit user action");
+        } else {
+          console.warn("Storage may be cleared by the UA under storage pressure.");
+        }
+      });
+    }
 
     const handleOffline = () => {
       toast.info('⚡ Offline Mode Active', {
@@ -122,10 +132,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/' ? import.meta.env.BASE_URL.replace(/\/$/, '') : undefined}>
-          <Router />
-          <CommandPalette />
-        </WouterRouter>
+        <ErrorBoundary>
+          <WouterRouter base={import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/' ? import.meta.env.BASE_URL.replace(/\/$/, '') : undefined}>
+            <Router />
+            <CommandPalette />
+          </WouterRouter>
+        </ErrorBoundary>
         <Toaster />
         <SonnerToaster position="top-center" richColors />
       </TooltipProvider>

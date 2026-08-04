@@ -5,6 +5,8 @@ import { Subject, StudySystem } from '@/db';
 import { EmptyStateGraphic } from '@/components/EmptyStateGraphic';
 import { Button } from '@/components/ui/button';
 import { SubjectCard } from '@/features/subjects/SubjectCard';
+import { loadMBBSPreset } from '@/lib/mbbs-preset';
+import { useState } from 'react';
 
 interface SubjectsGridProps {
   subjects: Subject[];
@@ -45,9 +47,22 @@ export function SubjectsGrid({
             title="Start Building Your Library"
             description="Create your first subject to begin mapping out topics, tracking tasks, and utilizing spaced repetition to maximize your retention."
             action={
-              <Button onClick={() => setShowAddSubject(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
-                <Plus className="w-4 h-4" /> Add First Subject
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                <Button onClick={() => setShowAddSubject(true)} size="sm" className="gap-1.5 rounded-xl shadow-xs">
+                  <Plus className="w-4 h-4" /> Add First Subject
+                </Button>
+                <Button 
+                  onClick={async () => {
+                    await loadMBBSPreset();
+                    window.location.reload();
+                  }} 
+                  variant="outline"
+                  size="sm" 
+                  className="gap-1.5 rounded-xl shadow-xs"
+                >
+                  <BookOpen className="w-4 h-4" /> Load MBBS Preset
+                </Button>
+              </div>
             }
           />
         ) : (
